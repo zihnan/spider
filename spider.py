@@ -155,8 +155,12 @@ class DownloadHTTPFile(DownloadFile):
         except Timeout as e:
             # The request timed out while trying to connect to the remote server.
             # Requests that produced this error are safe to retry.
-            self.error_handler("%s : ConnectTimeout" % (self.url))
+            self.error_handler("%s : Timeout" % (self.url))
             print "Timeout : %s" % e.message
+            return
+        except ContentDecodingError as e:
+            self.error_handler("%s : ContentDecodingError" % (self.url))
+            print "ContentDecodingError : %s" % e.message
             return
             
         self.logger('Checking alive ... : %s' % self.url)
