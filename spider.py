@@ -5,16 +5,39 @@ import getopt
 import re
 import requests
 import sys
+import time
 from fake_useragent import UserAgent
+from functools import wraps
 from lxml import html
 from lxml.etree import *
 from requests.exceptions import *
 
+def time_logger(log_file):
+    def timer(func):
+        @wraps(func)
+        def time_wrap(*arg, **kwargs):
+            pre_time = time.time()
+            o = func(*arg, **kwargs)
+            total_time = time.time() - pre_time
+            if isinstance(log_file, file):
+                log_file.write("\n<=TIMER BEGIN=>\n")
+                log_file.write(str(total_time) + '\n') 
+                log_file.write("\n<=TIMER END=>\n")
+        return time_wrap
+    return timer
+
 class DownloadFile:
     verbose = False
-    def run():
+    
+    def run(self):
         pass
 
+    def get_timer(self, use_time):
+        s = "\n<=TIMER BEGIN=>\n"
+        s += str(use_time) + '\n'
+        s += "\n<=TIMER END=>\n"
+        return s
+        
     def get_domain_name(self, url):
         domain_name = url[url.find('//')+2:]
         escape = domain_name.find('/')
@@ -72,7 +95,7 @@ class DownloadFTPFile(DownloadFile):
     file = None
     def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
         self.url = url
-        self.file_name = outputfile
+        self.output_file_name = outputfile
         self.verbose = verbose
         self.domain_name = self.get_domain_name(url)
         self.outputdir = outputdir
@@ -80,24 +103,24 @@ class DownloadFTPFile(DownloadFile):
     
     def run(self):
         #global error_log
-        if self.file_name is None:
+        if self.output_file_name is None:
             file_name = self.url[self.url.rfind('/') + 1:self.url.rfind('?')]
             file_name = file_name[:file_name.rfind('.')] + '.log'
         else:
-            file_name = self.file_name
+            file_name = self.output_file_name
 
         if self.outputdir is not None:
             file_name = self.outputdir + '/' + file_name
 
         try:
             self.logger('Opening file %s ...' % file_name)
-            self.file = open(file_name, 'w')
-            self.file.write(self.url + '\n')
+            self.output_file = open(file_name, 'w')
+            self.output_file.write(self.url + '\n')
 
             self.logger('Requesting %s ...' % self.url)
-            self.file.write(self.get_nslookup(self.domain_name))
-            self.file.write(self.get_host(self.domain_name))
-            self.file.write(self.get_whois(self.domain_name))
+            self.output_file.write(self.get_nslookup(self.domain_name))
+            self.output_file.write(self.get_host(self.domain_name))
+            self.output_file.write(self.get_whois(self.domain_name))
             self.write_content_to_file()
         except IOError as e:
             print "I/O error({0}): {1}".format(e.errno, e.strerror)
@@ -105,19 +128,23 @@ class DownloadFTPFile(DownloadFile):
             #error_log.write("%s : %s" % (self.url, str(e)))
         finally:
             self.logger('\tClosing file %s ...' % file_name)
-            self.file.close()
+            self.output_file.close()
 
     def write_content_to_file(self):
-        self.file.write('\n<=HTTP BEGIN=>\n')
+        self.output_file.write('\n<=HTTP BEGIN=>\n')
         filename = self.url[self.url.rfind('/') + 1:]
         path = self.url[7 + len(self.domain_name):len(self.url) - len(filename)]
         ftp = ftplib.FTP(self.domain_name)
         ftp.login("", "")
         if len(path) > 0:
             ftp.cwd(path)
-        ftp.retrbinary("RETR " + filename , self.file.write)
+        
+        pre_time = time.time()
+        ftp.retrbinary("RETR " + filename , self.output_file.write)
         ftp.close()
-        self.file.write('\n<=HTTP END=>\n')
+        total_time = time.time() - pre_time
+        self.output_file.write('\n<=HTTP END=>\n')
+        self.output_file.write(self.get_timer(total_time))
 
 class DownloadHTTPFile(DownloadFile):
     file = None
@@ -125,7 +152,7 @@ class DownloadHTTPFile(DownloadFile):
     
     def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
         self.url = url
-        self.file_name = outputfile
+        self.output_file_name = outputfile
         self.verbose = verbose
         self.redirect_cycle_times = redirect_cycle_times - 1
         self.domain_name = self.get_domain_name(url)
@@ -134,15 +161,16 @@ class DownloadHTTPFile(DownloadFile):
 
     def run(self):
         #global error_log
-        if self.file_name is None:
+        if self.output_file_name is None:
             file_name = self.url[self.url.rfind('/') + 1:self.url.rfind('?')]
             file_name = file_name[:file_name.rfind('.')] + '.log'
         else:
-            file_name = self.file_name
+            file_name = self.output_file_name
         
         if self.outputdir is not None:
             file_name = self.outputdir + '/' + file_name
 
+        pre_time = time.time()
         try:
             ua = UserAgent()
             headers = {'User-Agent': ua.random, 'Connection': 'close'}
@@ -175,8 +203,8 @@ class DownloadHTTPFile(DownloadFile):
             self.error_handler("%s : ChunkedEncodingError" % (self.url))
             print "ChunkedEncodingError : %s" % e.message
             return
-            
-            
+        
+        total_time = time.time() - pre_time
         self.logger('Checking alive ... : %s' % self.url)
         if not self.is_alive(response):
             self.error_handler('%s : %s' % (self.url, self.err))
@@ -185,21 +213,22 @@ class DownloadHTTPFile(DownloadFile):
             return
         try:
             self.logger('Opening file %s ...' % file_name)
-            self.file = open(file_name, 'w')
-            self.file.write(self.url + '\n')
+            self.output_file = open(file_name, 'w')
+            self.output_file.write(self.url + '\n')
 
             self.logger('Requesting %s ...' % self.url)
             if self.is_redirect_cycle(response):
-                self.file.write(self.get_redirect_warning())
-            self.file.write(self.get_nslookup(self.domain_name))
-            self.file.write(self.get_host(self.domain_name))
-            self.file.write(self.get_whois(self.domain_name))
+                self.output_file.write(self.get_redirect_warning())
+            self.output_file.write(self.get_nslookup(self.domain_name))
+            self.output_file.write(self.get_host(self.domain_name))
+            self.output_file.write(self.get_whois(self.domain_name))
             self.download_file(response)
+            self.output_file.write(self.get_timer(total_time))
         except IOError as e:
             print "I/O error({0}): {1}".format(e.errno, e.strerror)
         finally:
             self.logger('\tClosing file %s ...' % file_name)
-            self.file.close()
+            self.output_file.close()
 
     dont_download_err_codes = [403, 404, 500, 503]
     def is_alive(self, response):
@@ -259,8 +288,8 @@ class DownloadHTTPFile(DownloadFile):
                     break
 
         self.logger('\tDownloading %s ...' % response.url)
-        self.file.write(self.get_headers(response))
-        self.file.write(self.get_content(response))
+        self.output_file.write(self.get_headers(response))
+        self.output_file.write(self.get_content(response))
 
     def is_redirect_cycle(self, response):
         self.redirect_cycle = {}
