@@ -146,7 +146,7 @@ class DownloadHTTPFile(DownloadFile):
         try:
             ua = UserAgent()
             headers = {'User-Agent': ua.random, 'Connection': 'close'}
-            response = requests.get(self.url, timeout=30)
+            response = requests.get(self.url, timeout=30, headers=headers)
         except ConnectionError as e:
             self.error_handler("%s : ConnectionError" % (self.url))
             print "ConnectionError : %s" % str(e)
@@ -170,6 +170,12 @@ class DownloadHTTPFile(DownloadFile):
                 self.error_handler("%s : ContentDecodingError" % (self.url))
                 print "ContentDecodingError : %s" % e.message
                 return
+        except ChunkedEncodingError as e:
+            # The server declared chunked encoding but sent an invalid chunk.
+            self.error_handler("%s : ChunkedEncodingError" % (self.url))
+            print "ChunkedEncodingError : %s" % e.message
+            return
+            
             
         self.logger('Checking alive ... : %s' % self.url)
         if not self.is_alive(response):
