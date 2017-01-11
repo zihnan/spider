@@ -17,14 +17,17 @@ class DownloadFile:
 
     def get_domain_name(self, url):
         domain_name = url[url.find('//')+2:]
+        at_symbol = domain_name.find('@')
+        if at_symbol > -1:
+            domain_name = domain_name[at_symbol+1:]
         escape = domain_name.find('/')
-        if domain_name.find('/') > 0:
+        if escape > -1:
             domain_name = domain_name[:escape]
         else:
-            if domain_name.find('?') > 0:
+            if domain_name.find('?') > -1:
                 domain_name = domain_name[:domain_name.find('?')]
         commas = domain_name.rfind(':')
-        if commas > 0:
+        if commas > -1:
             domain_name = domain_name[:commas]
         print domain_name
         return domain_name
@@ -159,9 +162,14 @@ class DownloadHTTPFile(DownloadFile):
             print "Timeout : %s" % e.message
             return
         except ContentDecodingError as e:
-            self.error_handler("%s : ContentDecodingError" % (self.url))
-            print "ContentDecodingError : %s" % e.message
-            return
+            try:
+                ua = UserAgent()
+                headers = {'User-Agent': ua.random, 'Connection': 'close', 'Accept-Encoding': ''}
+                response = requests.get(self.url, headers=headers, timeout=30)
+            except ContentDecodingError as e1:
+                self.error_handler("%s : ContentDecodingError" % (self.url))
+                print "ContentDecodingError : %s" % e.message
+                return
             
         self.logger('Checking alive ... : %s' % self.url)
         if not self.is_alive(response):
