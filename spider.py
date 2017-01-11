@@ -17,15 +17,15 @@ class DownloadFile:
 
     def get_domain_name(self, url):
         domain_name = url[url.find('//')+2:]
-        at_symbol = domain_name.find('@')
-        if at_symbol > -1:
-            domain_name = domain_name[at_symbol+1:]
         escape = domain_name.find('/')
         if escape > -1:
             domain_name = domain_name[:escape]
         else:
             if domain_name.find('?') > -1:
                 domain_name = domain_name[:domain_name.find('?')]
+        at_symbol = domain_name.find('@')
+        if at_symbol > -1:
+            domain_name = domain_name[at_symbol+1:]
         commas = domain_name.rfind(':')
         if commas > -1:
             domain_name = domain_name[:commas]
