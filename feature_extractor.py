@@ -1,6 +1,7 @@
 import csv
 import getopt
 import inspect
+import itertools
 import lxml
 import os
 import re
@@ -9,48 +10,112 @@ from lxml import html
 marks = ['HTTP', 'HEADER', 'WHOIS', 'HOST', 'NSLOOKUP', 'NSLOOKUPSUMMARY', 'NSLOOKUP', 'NSLOOKUPSUMMARY']
 
 sys.path.append(os.getcwd())
+from extractor import Extractor
 
 class FeatureExtractor:
-    def __init__(self, dir_name=None):
-        self.init(dir_name)
+    def __init__(self, data_list, **kwargs):
+        self.verbose = False
+        self.debug = False
+        if 'verbose' in kwargs:
+          self.verbose = kwargs['verbose']
+        if 'debug' in kwargs:
+          self.debug = kwargs['debug']
+        self.init(data_list)
     
-    def init(self, dir_name):
-        if dir_name:
-            self.dir_name = dir_name
-        else:
-            self.dir_name = 'extractor'
+    def init(self, data_list):
+        self.extractors = []
+        if isinstance(data_list, list):
+            self.data_list = data_list
+        elif isinstance(data_list, str):
+            self.data_list = data_list.split('\n')
         self.extractors = self.get_extractors()
-        print self.extractors
+        self.extractors_features = {}
+        self.data_block = {}
+        self.__init_data_block()
+        for i in self.data_block:
+            self.extractors_features[i] = None
+    
+    def get_features(self, block_name):
+        return self.extractors_features[block_name.lower()]
+        
+    def __init_data_block(self):
+        for i in self.extractors:
+            self.data_block[i] = []
 
+    def add(self, extractor):
+        self.extractors.append(extractor)
+    
     def run(self):
+        self.__split_data()
         features = []
-        for extractor in self.extractors:
-            func = getattr(extractor, 'extract')
-            func()
-            #features.append(func())
+        url = self.data_list[0]
+        instance = self.extractors['url'](self.data_list[0]).set_verbose(self.verbose)
+        features += instance.extract()
+        for block_name in self.data_block:
+            if block_name != 'url':
+                temp = []
+                pre = None
+                if len(self.data_block[block_name]) > 0:
+                    for data in self.data_block[block_name]:
+                        instance = self.extractors[block_name](data, url=url)
+                        instance.set_verbose(self.verbose).set_debug(self.debug)
+                        if pre:
+                            print 'again'
+                            instance += pre
+                        pre = instance
+                        temp = instance.extract()
+                        self.extractors_features[block_name] = temp
+                else:
+                    temp = [0]
+                features += temp
         return features
     
+    def __features_combine(self, a, b):
+        if len(a) == len(b):
+            temp = []
+            for i, j in itertools.izip(a, b):
+                if type(i) == bool and type(j) == bool:
+                    temp.append(i and j)
+                else:
+                    temp.append(i + j)
+            return temp
+        return None
+    
+    def __split_data(self): 
+        entries = 0
+        temp_block = ''
+        for l in self.data_list:
+            if re.match('^<=.* BEGIN=>$', l.strip()):
+                entries += 1
+                class_type = l.split()
+                if class_type[0][2:] != 'NSLOOKUPSUMMARY':
+                    class_type = class_type[0][2:]
+            elif re.match('^<=.* END=>$', l.strip()):
+                if class_type != 'NSLOOKUPSUMMARY' and entries == 1:
+                    self.data_block[class_type.lower()].append(temp_block)
+                    temp_block = ''
+                    entries -= 1
+            elif entries > 0:
+                temp_block += l
+    
     def get_extractors(self):
-        extractor_list = []
-        sys.path.append(self.dir_name)
-        for extractor_module in os.listdir(self.dir_name):
+        extractor_list = {}
+        sys.path.append('extractors')
+        for extractor_module in os.listdir('extractors'):
             if extractor_module.endswith("feature.py"):
                 module = __import__(extractor_module[:-3])
                 for attr in dir(module):
                     subclass = getattr(module, attr)
                     if inspect.isclass(subclass) and issubclass(subclass, Extractor):
-                        extractor_list.append(subclass())
+                        extractor_list[extractor_module[:extractor_module.find('_')]] = subclass
         return extractor_list
-                        
+        
     def get_redirect(self):
         print "get_redirect"
         
     def get_post(self):
         print "get_post"
         
-class Extractor:
-    def extract(self):
-        pass
 
 def help_message():
     print '''
@@ -72,7 +137,8 @@ class header:
             row = option.split(': ')
             if len(row) > 1:
                 field, value = row[0], row[1]
-                self.headers[field] = value
+                if field != 'Status':
+                    self.headers[field] = value
             elif option.startswith('HTTP'):
                 row = option.split(' ')
                 self.headers['Status'] = row[1]
@@ -132,15 +198,20 @@ class http:
     frame = None
     redirect = None
     submit = None
-    
+    empty = False
     def __init__(self, url, html_str, outputfile):
         print 'http'
-        self.html_tree = html.fromstring(html_str)
+        try:
+            self.html_tree = html.fromstring(html_str)
+        except lxml.etree.ParserError as e:
+            self.empty = True
         self.url = url
         self.outputfile = outputfile
 
     def get_frame(self):
-        return self.html_tree.xpath('//iframe')
+        if not self.empty:
+            return self.html_tree.xpath('//iframe')
+        return None
 
     #7
     def is_frame(self):
@@ -149,7 +220,9 @@ class http:
         return False
 
     def get_redirect(self):
-        return self.html_tree.xpath('//meta[@http-equiv="refresh"]')
+        if not self.empty:
+            return self.html_tree.xpath('//meta[@http-equiv="refresh"]')
+        return None
 
     #8
     def is_redirect(self):
@@ -158,7 +231,9 @@ class http:
         return False
 
     def get_submit(self):
-        return self.html_tree.xpath('//*[@type="submit"]')
+        if not self.empty:
+            return self.html_tree.xpath('//*[@type="submit"]')
+        return None
 
     #9
     def is_submit(self):
@@ -207,6 +282,9 @@ def extract_from_dir(input_dir, verbose=None, outputfile=None, outputdir=None):
     current = os.getcwd()
     for i in os.listdir(input_dir):
         ext(input_dir + '/' + i, verbose=verbose, outputfile=outputfile, outputdir=outputdir)
+    features = {'url_length':-1,'dots':-1,'is_ip_address':False,'is_ssl_connection':False,'is_at_symbol':False,'is_hexadecimal':False,'is_frame':False,'is_redirect':False,'is_submit':False}
+    print [i for i in features]
+    print '=> Done <='
 
 def ext(input_file, verbose=None, outputfile=None, outputdir=None):
     temp = ''
@@ -217,7 +295,6 @@ def ext(input_file, verbose=None, outputfile=None, outputdir=None):
         url = f.readline()
         features['url_length'] = len(url)
         feature_fields = ['is_ip_address','is_ssl_connection','dots','is_at_symbol','is_hexadecimal']
-        redirect=False
         module = __import__(__file__[:-2])
         for i in feature_fields:
             _method = getattr(module, i)
@@ -232,30 +309,22 @@ def ext(input_file, verbose=None, outputfile=None, outputdir=None):
             elif re.match('^<=.* END=>$', l.strip()):
                 if class_type != 'NSLOOKUPSUMMARY':
                     class_name = class_type.lower()
-                    print "class name:",class_name
                     module = __import__(__file__[:-2])
                     _class = getattr(module, class_name)
-                    try:
-                        instance = _class(url, temp, outputfile)
-                    except lxml.etree.ParserError:
-                        print input_file
-                    print '\t',
+                    instance = _class(url, temp, outputfile)
                     if class_name == 'http':
                         features['is_frame'] = features['is_frame'] or instance.is_frame()
                         features['is_redirect'] = features['is_redirect'] or instance.is_redirect()
                         features['is_submit'] = features['is_submit'] or instance.is_submit()
                     elif class_name == 'header':
                         features['is_redirect'] = features['is_redirect'] or instance.is_redirect()
-                        if features['is_redirect']:
-                            redirect = True
                     elif class_name == 'host':
-                        print "ipv4:",instance.ipv4_numbers()
-                        print '\t',
-                        print "ipv6:",instance.ipv6_numbers()
+                        instance.ipv4_numbers()
+                        instance.ipv6_numbers()
                     temp = ''
             else:
                 temp += l
-    print
+                
     temp_feature = []
     for i in features:
         print i,
@@ -266,25 +335,56 @@ def ext(input_file, verbose=None, outputfile=None, outputdir=None):
                 temp_feature.append(0)
         else:
             temp_feature.append(features[i])
-    print
-        
+        print
     with open('csv.test', 'a') as f:
         writer = csv.writer(f)
         writer.writerow(temp_feature)
 
+def get_long(fields):
+    field_list = []
+    for field in fields:
+        if len(field) == 2:
+            field_list.append(field[1][2:])
+        else:
+            if field[0].startswith('--'):
+                field_list.append(field[0][2:])
+    return field_list
+
+def get_short(fields):
+    field_list = []
+    for field in fields:
+        if len(field) == 2:
+            if field[1][-1] == '=':
+                field_list.append(field[0][1] + ':')
+            else:
+                field_list.append(field[0][1])
+        else:
+            if field[0].startswith('--'):continue
+            else:
+                field_list.append(field[0][1])
+    return field_list
+
 def main(argv):
     input_file = None
     verbose = False
+    debug = False
     url = None
     redirect_cycle_times = 2
     output_dir = None
     output_file = None
     input_dir = None
+    field_pairs = (('-v',), ('-h','--help'), ('-i', '--inputfile='), ('-d', '--outputdir='), ('-o','--outputfile='), ('--startwith=',), ('--input-dir=',), ('-t',),('--debug',))
+    
+    #print ['help',' inputfile=', 'outputdir=', 'startwith=', 'outputfile=', 'input-dir=']
+    #print 'hi:vd:f:t'
+    #print ''.join(get_short(field_pairs))
     try:
-        opts,args = getopt.getopt(argv, 'hi:vd:f:t', ['help',' inputfile=', 'outputdir=', 'startwith=', 'outputfile=', 'input-dir='])
+        opts,args = getopt.getopt(argv, 'hi:vd:o:t:', ['help','inputfile=', 'outputdir=', 'startwith=', 'outputfile=', 'input-dir=', 'debug'])
         for opt,arg in opts:
             if opt in ('-v'):
                 verbose = True
+            elif opt in ('--debug'):
+                debug = True
             elif opt in ('-h','--help'):
                 help_message()
             elif opt in ('-i', '--inputfile='):
@@ -298,7 +398,13 @@ def main(argv):
             elif opt in ('--input-dir='):
                 input_dir = str(arg)
             elif opt in ('-t'):
-                FeatureExtractor().run()
+                block = ''
+                with open(arg, 'r') as f:
+                    block = f.readlines()
+                temp = FeatureExtractor(block, verbose=verbose, debug=debug).run()
+                if verbose:
+                  print 'length: ',len(temp)
+                print temp
                 return
                 
         #error_log = open('error.log','a')
