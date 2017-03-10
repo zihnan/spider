@@ -35,7 +35,7 @@ class DownloadFile:
     def get_url(self, url):
         s = '<=URL BEGIN=>\n'
         s += str(url)
-        s ++ '\n<=URL END=>\n'
+        s += '\n<=URL END=>\n'
         return s
 
     def get_timer(self, use_time):
