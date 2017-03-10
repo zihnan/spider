@@ -31,6 +31,12 @@ class DownloadFile:
     
     def run(self):
         pass
+        
+    def get_url(self, url):
+        s = '<=URL BEGIN=>\n'
+        s += str(url)
+        s ++ '\n<=URL END=>\n'
+        return s
 
     def get_timer(self, use_time):
         s = "\n<=TIMER BEGIN=>\n"
@@ -63,6 +69,7 @@ class DownloadFile:
         s += '\n'
         status = commands.getstatusoutput('nslookup %s' % domain_name)
         s += status[1]
+        '''
         for i in status[1].split('\n'):
             if i.startswith('Name'):
                 count += 1
@@ -70,6 +77,7 @@ class DownloadFile:
         result = dns.resolver.query(domain_name)
         s += 'NSLOOKUP number of total servers: %d\n' % count
         s += '\n<=NSLOOKUPSUMMARY END=>\n'
+        '''
         s += '\n<=NSLOOKUP END=>\n'
         return get_utf8(s)
 
@@ -115,7 +123,7 @@ class DownloadFTPFile(DownloadFile):
         try:
             self.logger('Opening file %s ...' % file_name)
             self.output_file = open(file_name, 'w')
-            self.output_file.write(self.url + '\n')
+            self.output_file.write(self.get_url(self.url))
 
             self.logger('Requesting %s ...' % self.url)
             self.output_file.write(self.get_nslookup(self.domain_name))
@@ -214,7 +222,7 @@ class DownloadHTTPFile(DownloadFile):
         try:
             self.logger('Opening file %s ...' % file_name)
             self.output_file = open(file_name, 'w')
-            self.output_file.write(self.url + '\n')
+            self.output_file.write(self.get_url(self.url))
 
             self.logger('Requesting %s ...' % self.url)
             if self.is_redirect_cycle(response):
