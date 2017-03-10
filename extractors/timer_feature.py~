@@ -1,0 +1,16 @@
+
+from extractor import Extractor
+class timer(Extractor):
+    def __init__(self, timer_str):
+        self.time = float(timer_str)
+        self.features = [self.get_time]
+        
+    def get_time(self):
+        return self.time
+        
+    def extract(self):
+      if self.verbose:
+        print 'timer ==> ',
+        print 'self.time'
+        print self.time
+      return [self.time,]
