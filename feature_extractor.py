@@ -9,10 +9,15 @@ import sys
 from lxml import html
 marks = ['HTTP', 'HEADER', 'WHOIS', 'HOST', 'NSLOOKUP', 'NSLOOKUPSUMMARY', 'NSLOOKUP', 'NSLOOKUPSUMMARY']
 
-sys.path.append(os.getcwd())
+_current_module_path = os.path.dirname(__file__)
+_extractors_fold_name = 'extractors'
+sys.path.append(_current_module_path)
+sys.path.append(os.path.join(_current_module_path, _extractors_fold_name))
 from extractor import Extractor
 
+
 class FeatureExtractor:
+    
     def __init__(self, data_list, **kwargs):
         self.verbose = False
         self.debug = False
@@ -86,8 +91,7 @@ class FeatureExtractor:
     
     def get_extractors(self):
         extractor_list = {}
-        sys.path.append('extractors')
-        for extractor_module in os.listdir('extractors'):
+        for extractor_module in os.listdir(os.path.join(_current_module_path, _extractors_fold_name)):
             if extractor_module.endswith("feature.py"):
                 module = __import__(extractor_module[:-3])
                 for attr in dir(module):
