@@ -34,9 +34,6 @@ class FeatureExtractor:
         self.__init_data_block()
         for i in self.data_block:
             self.extractors_features[i] = None
-    
-    def get_features(self, block_name):
-        return self.extractors_features[block_name.lower()]
         
     def __init_data_block(self):
         for i in self.extractors:
@@ -59,27 +56,16 @@ class FeatureExtractor:
                     for data in self.data_block[block_name]:
                         instance = self.extractors[block_name](data, url=url)
                         instance.set_verbose(self.verbose).set_debug(self.debug)
-                        if pre:
-                            print 'again'
+                        if pre and isinstance(pre, self.extractors[block_name]):
                             instance += pre
                         pre = instance
                         temp = instance.extract()
                         self.extractors_features[block_name] = temp
                 else:
-                    temp = [0]
+                    continue
+                    #temp = [0]
                 features += temp
         return features
-    
-    def __features_combine(self, a, b):
-        if len(a) == len(b):
-            temp = []
-            for i, j in itertools.izip(a, b):
-                if type(i) == bool and type(j) == bool:
-                    temp.append(i and j)
-                else:
-                    temp.append(i + j)
-            return temp
-        return None
     
     def __split_data(self): 
         entries = 0
@@ -110,160 +96,12 @@ class FeatureExtractor:
                         extractor_list[extractor_module[:extractor_module.find('_')]] = subclass
         return extractor_list
         
-    def get_redirect(self):
-        print "get_redirect"
-        
-    def get_post(self):
-        print "get_post"
-        
-
 def help_message():
     print '''
     spider [-h]
     spider [-d OUTPUT_DIR][-i INPUTFILE]
     spider [-d OUTPUT_DIR][-u HTTP_URL]
 '''
-
-class timer:
-    def __init__(self, url, timer_str,outputfile):
-        self.url = url
-
-class header:
-    def __init__(self, url, header_str, outputfile):
-        print 'header'
-        self.headers = {}
-        self.url = url
-        for option in header_str.split('\n'):
-            row = option.split(': ')
-            if len(row) > 1:
-                field, value = row[0], row[1]
-                if field != 'Status':
-                    self.headers[field] = value
-            elif option.startswith('HTTP'):
-                row = option.split(' ')
-                self.headers['Status'] = row[1]
-    
-    #8
-    def is_redirect(self):
-        return (int(self.headers['Status']) / 100) == 3
-
-class cycling:
-    def __init__(self, url, cycling_str, outpurfile):
-        print "cycling"
-        self.url = url
-
-class whois:
-    def __init__(self, url, header_str, outputfile):
-        print "whois"
-        self.url = url
-
-class nslookup:
-    def __init__(self, url, header_str, outputfile):
-        print "nslookup"
-        self.url = url
-
-class nslookupsummary:
-    def __init__(self, url, header_str, outputfile):
-        print "nslookupsummary"
-        self.url = url
-        
-class host:
-    def __init__(self, url, host_str, outputfile):
-        print "host"
-        self.ipv4_address_list = []
-        self.ipv6_address_list = []
-        self.url = url
-
-        for row in host_str.split('\n'):
-            if row:
-                cols = row.split(' ')
-                if cols[2] == 'address':
-                    self.ipv4_address_list.append(cols[3])
-                elif cols[2] == 'IPv6':
-                    self.ipv6_address_list.append(cols[4])
-
-    def ipv4_numbers(self):
-        return len(self.ipv4_address_list)
-
-    def ipv6_numbers(self):
-        return len(self.ipv6_address_list)
-        
-class http:
-    url_length = None
-    dots = None
-    ip_address = None
-    ssl_connetction = None
-    at_symbol = None
-    hexadecimal = None
-    frame = None
-    redirect = None
-    submit = None
-    empty = False
-    def __init__(self, url, html_str, outputfile):
-        print 'http'
-        try:
-            self.html_tree = html.fromstring(html_str)
-        except lxml.etree.ParserError as e:
-            self.empty = True
-        self.url = url
-        self.outputfile = outputfile
-
-    def get_frame(self):
-        if not self.empty:
-            return self.html_tree.xpath('//iframe')
-        return None
-
-    #7
-    def is_frame(self):
-        if self.get_frame():
-            return True
-        return False
-
-    def get_redirect(self):
-        if not self.empty:
-            return self.html_tree.xpath('//meta[@http-equiv="refresh"]')
-        return None
-
-    #8
-    def is_redirect(self):
-        if self.get_redirect():
-            return True
-        return False
-
-    def get_submit(self):
-        if not self.empty:
-            return self.html_tree.xpath('//*[@type="submit"]')
-        return None
-
-    #9
-    def is_submit(self):
-        if self.get_submit():
-            return True
-        return False
-
-#3
-def is_ip_address(url):
-    domain_name = get_domain_name(url)
-    return re.match('^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', domain_name) is not None
-
-#4
-def is_ssl_connection(url):
-    return url[:5] == 'https'
-
-#2
-def dots(url):
-    domain_name = get_domain_name(url)
-    return len(domain_name.split('.')) -1
-
-#5
-def is_at_symbol(url):
-    domain_name = get_domain_name(url)
-    return domain_name.find('@') > -1
-
-#6
-def is_hexadecimal(url):
-    domain_name = get_domain_name(url)
-    return domain_name.find('%') > -1
     
 def get_domain_name(url):
         domain_name = url[url.find('//')+2:]
