@@ -20,7 +20,7 @@ class HttpExtractor(Extractor):
               self.domain = self.get_domain_name(self.url)
         except lxml.etree.ParserError:
             self.empty = True
-            print 'no a no link'
+            sys.stderr.write('no a no link\n')
         
         striped_html_str = self.__striped_html_str(html_str)
         self.total_rows = len(striped_html_str.split('\n'))
@@ -38,7 +38,8 @@ class HttpExtractor(Extractor):
         
         self.bytes_distribution = self.__get_bytes_distribution(html_str)
         
-        self.features = [self.get_kbytes, self.is_frame, self.is_meta_redirect, self.is_meta_base64_redirect, self.is_form, self.is_input_submit, self.is_button_submit, self.same_extern_domain_script_rate, self.script_block_rate, self.style_block_rate, self.external_a_tag_same_domain,self.null_a_tag,self.same_external_domain_link_rate, self.same_external_domain_img_rate, self.get_bytes_distribution]
+        self.features = [self.is_frame, self.is_redirect, self.is_form]
+        
         
     def __get_bytes_distribution(self, html_str):
         temp = [0]*256
@@ -85,7 +86,6 @@ class HttpExtractor(Extractor):
                         block_begin = -1
                     elif l > 0:
                         temp += 1
-        print 'asdf' + str(temp)
         return temp
         
 
@@ -120,8 +120,6 @@ class HttpExtractor(Extractor):
         return []
 
     def get_frame(self):
-        print self.url
-        print '=====>',self.get_url()
         if not self.empty:
             return self.html_tree.xpath('//frame')
         return []
@@ -373,6 +371,6 @@ class HttpExtractor(Extractor):
         self.bytes += other.bytes
         
         for i in range(256):
-            self.bytes_distribution += other.bytes_distribution
+            self.bytes_distribution[i] += other.bytes_distribution[i]
         
         return self

@@ -5,10 +5,13 @@ class URLExtractor(Extractor):
     def __init__(self, url):
         self.url = url
         self.keywords = self.get_keywords()
-        self.features = [self.is_http_connection, self.is_ip_address, self.dots, self.is_special_words, self.is_hexadecimal]
+        self.features = [self.is_long_url, self.dots, self.is_ip_address, self.is_http_connection, self.is_at_symbol, self.is_hexadecimal]
         
     def is_special_words(self):
         return self.is_at_symbol() or self.is_dash_in_dir_struct() or self.is_start_in_dir_struct() or self.is_or_symbol_in_struct()
+        
+    def is_long_url(self):
+        return len(self.url) >= 127
         
     def get_keywords(self):
         temp = []

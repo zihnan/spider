@@ -15,7 +15,7 @@ class HostExtract(Extractor):
                 elif cols[2] == 'IPv6':
                     self.ipv6_address_list.append(cols[4])
                     
-        self.features = [self.ipv4_numbers, self.ipv6_numbers]
+        self.features = []
 
     def ipv4_numbers(self):
         return len(self.ipv4_address_list)

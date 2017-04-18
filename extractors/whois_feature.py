@@ -19,7 +19,7 @@ class Whois(Extractor):
     
     def __init__(self, whois_str, **kwargs):
         self.whois = whois_str
-        self.features = [self.is_with_whois]
+        self.features = []
     
     def get_none(self):
         return 0
@@ -32,19 +32,13 @@ class Whois(Extractor):
           if 'invalid' in row.rstrip().lower():
             for s in self.invalid:
               if self.__match(s, row):
-                print 'invalid'
-                print row
                 return False
           elif 'no' in row.rstrip().lower():
             for s in self.nothing:
               if self.__match(s, row):
-                print 'no'
-                print row
                 return False
           else:
             for s in self.others:
               if self.__match(s, row):
-                print 'other'
-                print row
                 return False
         return True

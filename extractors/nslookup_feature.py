@@ -5,7 +5,7 @@ class NslookupExtract(Extractor):
     def __init__(self, nslookup_str, **kwargs):
         self.nslookup = nslookup_str
         self.serial = self.get_serial()
-        self.features = [self.is_alias, self.is_weird_serial, self.get_day_age]
+        self.features = []
     
     def get_canonical_name(self):
         name_list = set()
