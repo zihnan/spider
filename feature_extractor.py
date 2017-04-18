@@ -10,11 +10,16 @@ from lxml import html
 marks = ['HTTP', 'HEADER', 'WHOIS', 'HOST', 'NSLOOKUP', 'NSLOOKUPSUMMARY', 'NSLOOKUP', 'NSLOOKUPSUMMARY']
 
 _current_module_path = os.path.dirname(__file__)
-_extractors_fold_name = 'extractors'
+_extractors_fold_name = 'extractors3'
 sys.path.append(_current_module_path)
 sys.path.append(os.path.join(_current_module_path, _extractors_fold_name))
 from extractor import Extractor
 
+def set_extractors_path(fold_name):
+    global Extractor
+    _extractors_fold_name = fold_name
+    sys.path[-1]=os.path.join(_current_module_path, _extractors_fold_name)
+    Extractor = __import__('extractor').Extractor
 
 class FeatureExtractor:
     
@@ -22,9 +27,17 @@ class FeatureExtractor:
         self.verbose = False
         self.debug = False
         if 'verbose' in kwargs:
-          self.verbose = kwargs['verbose']
+            self.verbose = kwargs['verbose']
         if 'debug' in kwargs:
-          self.debug = kwargs['debug']
+            self.debug = kwargs['debug']
+        if 'numeric' in kwargs:
+            self.numeric = kwargs['numeric']
+        else:
+            self.numeric = False
+        if 'quiet' in kwargs:
+            self.quiet = kwargs['quiet']
+        else:
+            self.quiet = False
         self.init(data_list)
     
     def init(self, data_list):
@@ -33,6 +46,7 @@ class FeatureExtractor:
             self.data_list = data_list
         elif isinstance(data_list, str):
             self.data_list = data_list.split('\n')
+        
         self.extractors = self.get_extractors()
         self.extractors_features = {}
         self.data_block = {}
@@ -52,6 +66,7 @@ class FeatureExtractor:
         features = []
         url = self.data_list[0]
         instance = self.extractors['url'](self.data_list[0]).set_verbose(self.verbose)
+        instance.set_numeric(self.numeric)
         features += instance.extract()
         for block_name in self.data_block:
             if block_name != 'url':
@@ -60,15 +75,17 @@ class FeatureExtractor:
                 if len(self.data_block[block_name]) > 0:
                     for data in self.data_block[block_name]:
                         instance = self.extractors[block_name](data, url=url)
-                        instance.set_verbose(self.verbose).set_debug(self.debug)
+                        instance.set_verbose(self.verbose)
+                        instance.set_numeric(self.numeric)
+                        instance.set_quiet(self.quiet)
                         if pre and isinstance(pre, self.extractors[block_name]):
                             instance += pre
                         pre = instance
                         temp = instance.extract()
                         self.extractors_features[block_name] = temp
                 else:
+                    temp = [0]
                     continue
-                    #temp = [0]
                 features += temp
         return features
     
@@ -210,18 +227,17 @@ def main(argv):
     input_file = None
     verbose = False
     debug = False
+    numeric = False
+    quiet = False
     url = None
     redirect_cycle_times = 2
     output_dir = None
     output_file = None
     input_dir = None
-    field_pairs = (('-v',), ('-h','--help'), ('-i', '--inputfile='), ('-d', '--outputdir='), ('-o','--outputfile='), ('--startwith=',), ('--input-dir=',), ('-t',),('--debug',))
+    field_pairs = (('-v',), ('-h','--help'), ('-i', '--inputfile='), ('-d', '--outputdir='), ('-o','--outputfile='), ('--startwith=',), ('--input-dir=',),('--debug',), ('-n','--numeric'), ('--quiet',), ('--select=',))
     
-    #print ['help',' inputfile=', 'outputdir=', 'startwith=', 'outputfile=', 'input-dir=']
-    #print 'hi:vd:f:t'
-    #print ''.join(get_short(field_pairs))
     try:
-        opts,args = getopt.getopt(argv, 'hi:vd:o:t:', ['help','inputfile=', 'outputdir=', 'startwith=', 'outputfile=', 'input-dir=', 'debug'])
+        opts,args = getopt.getopt(argv, ''.join(get_short(field_pairs)), get_long(field_pairs))
         for opt,arg in opts:
             if opt in ('-v'):
                 verbose = True
@@ -235,25 +251,26 @@ def main(argv):
                 output_dir = arg
             elif opt in ('-o','--outputfile='):
                 output_file = str(arg)
-            elif opt in ('--startwith='):
+            elif opt in ('--startwith=',):
                 start_number = int(arg)
-            elif opt in ('--input-dir='):
+            elif opt in ('--input-dir=',):
                 input_dir = str(arg)
-            elif opt in ('-t'):
-                block = ''
+            elif opt in ('-n','--numeric'):
+                numeric = True
+            elif opt in field_pairs[-1]:
+                quiet = True
+            elif opt in '--select=':
+                sys.stderr.write('Set Extractor Path: {}\n'.format(str(arg)))
+                set_extractors_path(str(arg))
+        
+        if len(args) > 0:
+            for arg in args:
                 with open(arg, 'r') as f:
                     block = f.readlines()
-                temp = FeatureExtractor(block, verbose=verbose, debug=debug).run()
+                temp = FeatureExtractor(block, verbose=verbose, debug=debug, numeric=numeric, quiet=quiet).run()
                 if verbose:
                   print 'length: ',len(temp)
                 print temp
-                return
-                
-        #error_log = open('error.log','a')
-        if input_dir is not None:
-            extract_from_dir(input_dir, outputfile=output_file, outputdir=output_dir, verbose=verbose)
-        elif input_file is not None:
-            ext(input_file, verbose=verbose, outputfile=output_file, outputdir=output_dir)
     except getopt.GetoptError as err:
         print str(err)
         help_message()
