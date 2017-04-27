@@ -162,11 +162,14 @@ class DownloadHTTPFile(DownloadFile):
         
         if self.outputdir is not None:
             file_name = self.outputdir + '/' + file_name
-
+            
         pre_time = time.time()
+        
+        ua = UserAgent()
+        user_agent = ua.random
+        headers = {'User-Agent': user_agent, 'Connection': 'close'}
+        
         try:
-            ua = UserAgent()
-            headers = {'User-Agent': ua.random, 'Connection': 'close'}
             response = requests.get(self.url, timeout=30, headers=headers)
         except ConnectionError as e:
             self.error_handler("%s : ConnectionError" % (self.url))
@@ -183,14 +186,14 @@ class DownloadHTTPFile(DownloadFile):
             print "Timeout : %s" % e.message
             return
         except ContentDecodingError as e:
-            try:
-                ua = UserAgent()
-                headers = {'User-Agent': ua.random, 'Connection': 'close', 'Accept-Encoding': ''}
-                response = requests.get(self.url, headers=headers, timeout=30)
-            except ContentDecodingError as e1:
-                self.error_handler("%s : ContentDecodingError" % (self.url))
-                print "ContentDecodingError : %s" % e.message
-                return
+            if 'Accept-Encoding' not in headers:
+                headers['Accept-Encoding'] = ''
+                try:
+                    response = requests.get(self.url, timeout=30, headers=headers)
+                except ContentDecodingError as e1:
+                    self.error_handler("%s : ContentDecodingError" % (self.url))
+                    print "ContentDecodingError : %s" % e.message
+                    return
         except ChunkedEncodingError as e:
             # The server declared chunked encoding but sent an invalid chunk.
             self.error_handler("%s : ChunkedEncodingError" % (self.url))
@@ -222,12 +225,27 @@ class DownloadHTTPFile(DownloadFile):
         finally:
             self.logger('\tClosing file %s ...' % file_name)
             self.output_file.close()
-
+            
+    def _get_content(self, response):
+        download_time_limit = 60*60*10
+        temp = ''
+        pre_time = time.time()
+        content_iter = response.iter_lines()
+        for row in content_iter:
+            current_time = time.time()
+            if current_time - pre_time > download_time_limit:
+                temp = ''
+                break
+            else:
+                temp += row
+        return temp    
+            
     dont_download_err_codes = [403, 404, 500, 503]
     def is_alive(self, response):
         #global error_log
+        content = _get_content(response)
         try:
-            tree = html.fromstring(response.content)
+            tree = html.fromstring(content)
             extract_titles = tree.xpath('//title/text()')
         except XMLSyntaxError as e:
             print str(e)
@@ -241,7 +259,7 @@ class DownloadHTTPFile(DownloadFile):
             self.error_handler("%s : %s" % (self.url, str(e)))
             return False
         except UnicodeDecodeError as e:
-            tree = html.fromstring(get_unicode(response.content))
+            tree = html.fromstring(get_unicode(content))
             extract_titles = tree.xpath('//title/text()')
 
         if extract_titles:
@@ -279,7 +297,7 @@ class DownloadHTTPFile(DownloadFile):
                         break
                 else:
                     break
-
+                    
         self.logger('\tDownloading %s ...' % response.url)
         self.output_file.write(self.get_headers(response))
         self.output_file.write(self.get_content(response))
