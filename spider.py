@@ -243,7 +243,7 @@ class DownloadHTTPFile(DownloadFile):
     dont_download_err_codes = [403, 404, 500, 503]
     def is_alive(self, response):
         #global error_log
-        content = _get_content(response)
+        content = self._get_content(response)
         try:
             tree = html.fromstring(content)
             extract_titles = tree.xpath('//title/text()')
