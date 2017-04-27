@@ -170,7 +170,7 @@ class DownloadHTTPFile(DownloadFile):
         headers = {'User-Agent': user_agent, 'Connection': 'close'}
         
         try:
-            response = requests.get(self.url, timeout=30, headers=headers)
+            response = requests.get(self.url, timeout=30, headers=headers, stream=True)
         except ConnectionError as e:
             self.error_handler("%s : ConnectionError" % (self.url))
             print "ConnectionError : %s" % str(e)
@@ -189,7 +189,7 @@ class DownloadHTTPFile(DownloadFile):
             if 'Accept-Encoding' not in headers:
                 headers['Accept-Encoding'] = ''
                 try:
-                    response = requests.get(self.url, timeout=30, headers=headers)
+                    response = requests.get(self.url, timeout=30, headers=headers, stream=True)
                 except ContentDecodingError as e1:
                     self.error_handler("%s : ContentDecodingError" % (self.url))
                     print "ContentDecodingError : %s" % e.message
