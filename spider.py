@@ -101,10 +101,10 @@ class DownloadFTPFile(DownloadFile):
             file_name = file_name[:file_name.rfind('.')] + '.log'
         else:
             file_name = self.output_file_name
-
+        
         if self.outputdir is not None:
             file_name = self.outputdir + '/' + file_name
-
+        
         try:
             self.logger('Opening file %s ...' % file_name)
             self.output_file = open(file_name, 'w')
@@ -243,9 +243,9 @@ class DownloadHTTPFile(DownloadFile):
     dont_download_err_codes = [403, 404, 500, 503]
     def is_alive(self, response):
         #global error_log
-        content = self._get_content(response)
+        self.content = self._get_content(response)
         try:
-            tree = html.fromstring(content)
+            tree = html.fromstring(self.content)
             extract_titles = tree.xpath('//title/text()')
         except XMLSyntaxError as e:
             print str(e)
@@ -259,7 +259,7 @@ class DownloadHTTPFile(DownloadFile):
             self.error_handler("%s : %s" % (self.url, str(e)))
             return False
         except UnicodeDecodeError as e:
-            tree = html.fromstring(get_unicode(content))
+            tree = html.fromstring(get_unicode(self.content))
             extract_titles = tree.xpath('//title/text()')
 
         if extract_titles:
@@ -329,7 +329,7 @@ class DownloadHTTPFile(DownloadFile):
 
     def get_content(self, response):
         s = '\n<=HTTP BEGIN=>\n'
-        s += response.text
+        s += self.content
         s += '\n<=HTTP END=>\n'
         return get_utf8(s)
 
