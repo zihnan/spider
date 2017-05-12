@@ -14,20 +14,22 @@ Grab the information from the \<URL\> and save into a fold which named \<FOLD\>.
 ### feature_extractor.py
 Extract features vector from sample file which downloaded by spyder.py.
 
-    python feature_extractor.py [-h] [-v] [--startwith STARTWITH] [--debug] [-n] [--select EXTRACTORS_DIRECTORY] SAMPLE_FILE
+        usage: kkk.py [-h] [-v] [-n] [--startwith STARTWITH] [--quiet] [--debug] [--select EXTRACTORS_DIRECTORY] sample_file [sample_file ...]
 
-    positional arguments:
-      SAMPLE_FILE           sample file formated by spyder.py
-    
-    optional arguments:
-      -h, --help            show this help message and exit
-      -v, --verbose         display process detail
-      --startwith STARTWITH
-                            ouput file name offset
-      --debug               display debug information
-      -n, --numeric         numeric feature
-      --select EXTRACTORS_DIRECTORY
-                            select extractors directory
+        positional arguments:
+          sample_file           sample file formated by spyder.py
+        
+        optional arguments:
+          -h, --help            show this help message and exit
+          -v, --verbose         display process detail
+          -n, --numeric         numeric feature
+          --startwith STARTWITH
+                                ouput file name offset
+          --quiet               display information
+          --debug               display debug information
+          --select EXTRACTORS_DIRECTORY
+                                select extractors directory
+
                             
 ### import feature_extractor
 In the directory which contain feature_extracor.py and extracotrs directories, you can use `import feature_extractor` to get features extractor.
