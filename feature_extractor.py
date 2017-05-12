@@ -1,3 +1,4 @@
+import argparse
 import csv
 import getopt
 import inspect
@@ -10,7 +11,7 @@ from lxml import html
 marks = ['HTTP', 'HEADER', 'WHOIS', 'HOST', 'NSLOOKUP', 'NSLOOKUPSUMMARY', 'NSLOOKUP', 'NSLOOKUPSUMMARY']
 
 _current_module_path = os.path.dirname(__file__)
-_extractors_fold_name = 'extractors'
+_extractors_fold_name = 'extractors4'
 sys.path.append(_current_module_path)
 sys.path.append(os.path.join(_current_module_path, _extractors_fold_name))
 from extractor import Extractor
@@ -93,31 +94,6 @@ class FeatureExtractor:
         if not self.quiet:
             sys.stderr.write(str(len(f2)) + '\n')
             sys.stderr.write(str(f2) + '\n')
-        '''
-        for block_name in self.data_block:
-            if block_name != 'url':
-                temp = []
-                pre = None
-                if len(self.data_block[block_name]) > 0:
-                    for data in self.data_block[block_name]:
-                        try:
-                            instance = self.extractors[block_name](data, url=url)
-                            instance.set_verbose(self.verbose)
-                            instance.set_numeric(self.numeric)
-                            instance.set_quiet(self.quiet)
-                            if pre and isinstance(pre, self.extractors[block_name]):
-                                instance += pre
-                            pre = instance
-                            temp = instance.extract()
-                            self.extractors_features[block_name] = temp
-                        except KeyError:
-                            continue
-                else:
-                    temp = [0]
-                    continue
-                features += temp
-        return features
-        '''
         return f2
     
     def __split_data(self): 
@@ -172,14 +148,6 @@ def get_domain_name(url):
             domain_name = domain_name[:commas]
         return domain_name
     
-def extract_from_dir(input_dir, verbose=None, outputfile=None, outputdir=None):
-    current = os.getcwd()
-    for i in os.listdir(input_dir):
-        ext(input_dir + '/' + i, verbose=verbose, outputfile=outputfile, outputdir=outputdir)
-    features = {'url_length':-1,'dots':-1,'is_ip_address':False,'is_ssl_connection':False,'is_at_symbol':False,'is_hexadecimal':False,'is_frame':False,'is_redirect':False,'is_submit':False}
-    print [i for i in features]
-    print '=> Done <='
-
 def ext(input_file, verbose=None, outputfile=None, outputdir=None):
     temp = ''
     entries = 0
@@ -268,9 +236,26 @@ def main(argv):
     redirect_cycle_times = 2
     output_dir = None
     output_file = None
-    input_dir = None
     field_pairs = (('-v',), ('-h','--help'), ('-i', '--inputfile='), ('-d', '--outputdir='), ('-o','--outputfile='), ('--startwith=',), ('--input-dir=',),('--debug',), ('-n','--numeric'), ('--quiet',), ('--select=',))
     
+    parser = argparse.ArgumentParser(description='Feature Extraction')
+    parser.add_argument('-v', '--verbose', help='display process detail', default=False, action='store_true')
+    parser.add_argument('-n','--numeric', help='numeric feature', default=False, action='store_true')
+    parser.add_argument('--startwith', help='ouput file name offset', default=0, action='store', type=int)
+    parser.add_argument('--quiet', help='display information', default=False, action='store_true')
+    parser.add_argument('--debug', help='display debug information', default=False, action='store_true')
+    parser.add_argument('--select', help='select extractors directory', metavar='EXTRACTORS_DIRECTORY', default='extractors', action='store')
+    parser.add_argument('sample_file', nargs='+',type=str, help='sample file formated by spyder.py')
+    args = parser.parse_args()
+    
+    for arg in args.sample_file:
+        with open(arg, 'r') as f:
+            block = f.readlines()
+        temp = FeatureExtractor(block, verbose=args.verbose, debug=args.debug, numeric=args.numeric, quiet=args.quiet).run()
+        if verbose:
+          sys.stderr.write('length: %d' % len(temp))
+        print temp
+    '''
     try:
         opts,args = getopt.getopt(argv, ''.join(get_short(field_pairs)), get_long(field_pairs))
         for opt,arg in opts:
@@ -280,21 +265,13 @@ def main(argv):
                 debug = True
             elif opt in ('-h','--help'):
                 help_message()
-            elif opt in ('-i', '--inputfile='):
-                input_file = str(arg)
-            elif opt in ('-d', '--outputdir='):
-                output_dir = arg
-            elif opt in ('-o','--outputfile='):
-                output_file = str(arg)
             elif opt in ('--startwith=',):
                 start_number = int(arg)
-            elif opt in ('--input-dir=',):
-                input_dir = str(arg)
             elif opt in ('-n','--numeric'):
                 numeric = True
-            elif opt in field_pairs[-1]:
+            elif opt in ('--quiet',):
                 quiet = True
-            elif opt in '--select=':
+            elif opt in ('--select=',):
                 sys.stderr.write('Set Extractor Path: {}\n'.format(str(arg)))
                 set_extractors_path(str(arg))
         
@@ -309,6 +286,7 @@ def main(argv):
     except getopt.GetoptError as err:
         print str(err)
         help_message()
+    '''
 
 if __name__ == '__main__':
     main(sys.argv[1:])
