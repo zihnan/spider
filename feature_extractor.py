@@ -10,17 +10,16 @@ from lxml import html
 marks = ['HTTP', 'HEADER', 'WHOIS', 'HOST', 'NSLOOKUP', 'NSLOOKUPSUMMARY', 'NSLOOKUP', 'NSLOOKUPSUMMARY']
 
 _current_module_path = os.path.dirname(__file__)
-_extractors_fold_name = 'extractors3'
+_extractors_fold_name = 'extractors'
 sys.path.append(_current_module_path)
 sys.path.append(os.path.join(_current_module_path, _extractors_fold_name))
 from extractor import Extractor
 
 def set_extractors_path(fold_name):
-    global Extractor
+    global _extractors_fold_name
     _extractors_fold_name = fold_name
     sys.path[-1]=os.path.join(_current_module_path, _extractors_fold_name)
-    Extractor = __import__('extractor').Extractor
-
+    
 class FeatureExtractor:
     
     def __init__(self, data_list, **kwargs):
@@ -37,7 +36,8 @@ class FeatureExtractor:
         if 'quiet' in kwargs:
             self.quiet = kwargs['quiet']
         else:
-            self.quiet = False
+            self.quiet = True
+            
         self.init(data_list)
     
     def init(self, data_list):
@@ -47,7 +47,7 @@ class FeatureExtractor:
         elif isinstance(data_list, str):
             self.data_list = data_list.split('\n')
         
-        self.extractors = self.get_extractors()
+        self.extractors = self.__get_extractors()
         self.extractors_features = {}
         self.data_block = {}
         self.__init_data_block()
@@ -57,7 +57,7 @@ class FeatureExtractor:
     def __init_data_block(self):
         for i in self.extractors:
             self.data_block[i] = []
-
+            
     def add(self, extractor):
         self.extractors.append(extractor)
     
@@ -68,30 +68,62 @@ class FeatureExtractor:
         instance = self.extractors['url'](self.data_list[0]).set_verbose(self.verbose)
         instance.set_numeric(self.numeric)
         features += instance.extract()
+        
+        f2 = features
+        for extractor_name in self.extractors:
+            if extractor_name != 'url':
+                temp = []
+                pre = None
+                if len(self.data_block[extractor_name]) > 0:
+                    for data in self.data_block[extractor_name]:
+                        instance = self.extractors[extractor_name](data, url=url)
+                        instance.set_verbose(self.verbose)
+                        instance.set_numeric(self.numeric)
+                        instance.set_quiet(self.quiet)
+                        if pre and isinstance(pre, self.extractors[extractor_name]):
+                            instance += pre
+                        pre = instance
+                        temp = instance.extract()
+                        self.extractors_features[extractor_name] = temp
+                else:
+                    if not self.quiet:
+                        sys.stderr.write(extractor_name + ' Block: NOT CONTAINED IN DATA\n')
+                    temp += [0] * len(self.extractors[extractor_name]('', url=url).features)
+                f2 += temp
+        if not self.quiet:
+            sys.stderr.write(str(len(f2)) + '\n')
+            sys.stderr.write(str(f2) + '\n')
+        '''
         for block_name in self.data_block:
             if block_name != 'url':
                 temp = []
                 pre = None
                 if len(self.data_block[block_name]) > 0:
                     for data in self.data_block[block_name]:
-                        instance = self.extractors[block_name](data, url=url)
-                        instance.set_verbose(self.verbose)
-                        instance.set_numeric(self.numeric)
-                        instance.set_quiet(self.quiet)
-                        if pre and isinstance(pre, self.extractors[block_name]):
-                            instance += pre
-                        pre = instance
-                        temp = instance.extract()
-                        self.extractors_features[block_name] = temp
+                        try:
+                            instance = self.extractors[block_name](data, url=url)
+                            instance.set_verbose(self.verbose)
+                            instance.set_numeric(self.numeric)
+                            instance.set_quiet(self.quiet)
+                            if pre and isinstance(pre, self.extractors[block_name]):
+                                instance += pre
+                            pre = instance
+                            temp = instance.extract()
+                            self.extractors_features[block_name] = temp
+                        except KeyError:
+                            continue
                 else:
                     temp = [0]
                     continue
                 features += temp
         return features
+        '''
+        return f2
     
     def __split_data(self): 
         entries = 0
         temp_block = ''
+        
         for l in self.data_list:
             if re.match('^<=.* BEGIN=>$', l.strip()):
                 entries += 1
@@ -100,13 +132,16 @@ class FeatureExtractor:
                     class_type = class_type[0][2:]
             elif re.match('^<=.* END=>$', l.strip()):
                 if class_type != 'NSLOOKUPSUMMARY' and entries == 1:
-                    self.data_block[class_type.lower()].append(temp_block)
+                    try:
+                        self.data_block[class_type.lower()].append(temp_block)
+                    except KeyError:
+                        self.data_block[class_type.lower()] = [temp_block]
                     temp_block = ''
                     entries -= 1
             elif entries > 0:
                 temp_block += l
     
-    def get_extractors(self):
+    def __get_extractors(self):
         extractor_list = {}
         for extractor_module in os.listdir(os.path.join(_current_module_path, _extractors_fold_name)):
             if extractor_module.endswith("feature.py"):

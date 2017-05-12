@@ -225,6 +225,7 @@ class DownloadHTTPFile(DownloadFile):
         finally:
             self.logger('\tClosing file %s ...' % file_name)
             self.output_file.close()
+            response.close()
             
     def _get_content(self, response):
         download_time_limit = 60*60*10
@@ -232,8 +233,8 @@ class DownloadHTTPFile(DownloadFile):
         pre_time = time.time()
         content_iter = response.iter_lines()
         for row in content_iter:
-            current_time = time.time()
-            if current_time - pre_time > download_time_limit:
+            delta = time.time() - pre_time
+            if delta > download_time_limit:
                 temp = ''
                 break
             else:
@@ -341,10 +342,12 @@ class DownloadHTTPFile(DownloadFile):
         s += '\n<=HEADER END=>\n'
         return get_utf8(s)
 
+import codecs
+
 start_number = 0
 def crawl_from_file(file_path, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
     try:
-      with open(file_path,'r') as f:
+      with codecs.open(file_path,'r', encodint='utf8') as f:
         for i, url in enumerate(f.readlines()):
            print '%d STARTING ... %s ' % (i + start_number, url.rstrip())
            a = downloader(url.rstrip(), outputfile=str(i + start_number), verbose=verbose, outputdir=outputdir, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler)

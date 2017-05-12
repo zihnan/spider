@@ -5,6 +5,7 @@ class Extractor(object):
     features = []
     verbose = False
     debug = False
+    numeric = False
     url = None
     domain =None
 
@@ -16,13 +17,25 @@ class Extractor(object):
 
     def get_url(self):
         pass
-
+    
+    def __to_numeric(self, features):
+        temp = []
+        for f in features:
+            if isinstance(f, bool):
+                temp.append(int(f))
+            else:
+                temp.append(f)
+        return temp
+        
     def extract(self):
+        temp = [i() for i in self.features]
+        if self.numeric:
+            temp = self.__to_numeric(temp)
         if self.verbose:
-            print self.__class__.__name__, ' ==> ',
-            print [i.__name__ for i in self.features]
-            print [i() for i in self.features]
-        return [i() for i in self.features]
+            print '{name} length: {len}'.format(name=self.__class__.__name__, len=len(temp))
+            print '{:>10} ==> {}'.format('', str([i.__name__ for i in self.features]))
+            print '{:>10} ==> {}'.format('', str(temp))
+        return temp
     
     # check whether contains 'JavaScript:document.location.href'
     def is_javascript_url(self, url):
@@ -37,7 +50,14 @@ class Extractor(object):
     def set_debug(self, enable):
         self.debug = enable
         return self
-        
+    
+    def set_numeric(self, enable):
+        self.numeric = enable
+        return self
+    
+    def set_quiet(self,enable):
+        pass
+    
     def __add__(self, other):
         pass
     
@@ -79,5 +99,7 @@ class Extractor(object):
         at_sym = domain_name.find('@')
         if at_sym > 0:
             domain_name = domain_name[at_sym + 1:]
+        if domain_name.startswith('www.'):
+            domain_name = domain_name[4:]
         return domain_name
         
