@@ -36,7 +36,7 @@ class HttpExtractor(Extractor):
         self.redirect = self.get_redirect()
         self.script_tags = self.get_script_tags()
         
-        self.bytes_distribution = self.__get_bytes_distribution(html_str)
+        #self.bytes_distribution = self.__get_bytes_distribution(html_str)
         
         self.features = [self.get_kbytes, self.is_frame, self.is_meta_redirect, self.is_meta_base64_redirect, self.is_form, self.is_input_submit, self.is_button_submit, self.same_extern_domain_script_rate, self.script_block_rate, self.style_block_rate, self.external_a_tag_same_domain,self.null_a_tag,self.same_external_domain_link_rate, self.same_external_domain_img_rate]
         
@@ -368,8 +368,8 @@ class HttpExtractor(Extractor):
         self.total_rows += other.total_rows
         self.script_tags += other.script_tags
         self.bytes += other.bytes
-        
+        '''
         for i in range(256):
             self.bytes_distribution[i] += other.bytes_distribution[i]
-        
+        '''
         return self

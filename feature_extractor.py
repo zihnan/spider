@@ -11,7 +11,7 @@ from lxml import html
 marks = ['HTTP', 'HEADER', 'WHOIS', 'HOST', 'NSLOOKUP', 'NSLOOKUPSUMMARY', 'NSLOOKUP', 'NSLOOKUPSUMMARY']
 
 _current_module_path = os.path.dirname(__file__)
-_extractors_fold_name = 'extractors4'
+_extractors_fold_name = 'extractors5'
 sys.path.append(_current_module_path)
 sys.path.append(os.path.join(_current_module_path, _extractors_fold_name))
 from extractor import Extractor
@@ -38,7 +38,9 @@ class FeatureExtractor:
             self.quiet = kwargs['quiet']
         else:
             self.quiet = True
-            
+        if 'tfidf_percent' in kwargs:
+            self.tfidf_percent = kwargs['tfidf_percent']
+        
         self.init(data_list)
     
     def init(self, data_list):
@@ -77,7 +79,7 @@ class FeatureExtractor:
                 pre = None
                 if len(self.data_block[extractor_name]) > 0:
                     for data in self.data_block[extractor_name]:
-                        instance = self.extractors[extractor_name](data, url=url)
+                        instance = self.extractors[extractor_name](data, url=url, tfidf_percent=self.tfidf_percent)
                         instance.set_verbose(self.verbose)
                         instance.set_numeric(self.numeric)
                         instance.set_quiet(self.quiet)
@@ -246,14 +248,18 @@ def main(argv):
     parser.add_argument('--debug', help='display debug information', default=False, action='store_true')
     parser.add_argument('--select', help='select extractors directory', metavar='EXTRACTORS_DIRECTORY', default='extractors', action='store')
     parser.add_argument('sample_file', nargs='+',type=str, help='sample file formated by spyder.py')
+    parser.add_argument('--tfidf_percent', help='tfidf percent of title feature', type=float,  metavar='TFIDF_PERCENT', default='0.9', action='store')
     args = parser.parse_args()
-    
+    if args.select:
+        set_extractors_path(args.select)
+        
     for arg in args.sample_file:
         with open(arg, 'r') as f:
             block = f.readlines()
-        temp = FeatureExtractor(block, verbose=args.verbose, debug=args.debug, numeric=args.numeric, quiet=args.quiet).run()
+        temp = FeatureExtractor(block, verbose=args.verbose, debug=args.debug, numeric=args.numeric, quiet=args.quiet, tfidf_percent=args.tfidf_percent).run()
         if verbose:
           sys.stderr.write('length: %d' % len(temp))
+        sys.stderr.write(arg+'\n')
         print temp
     '''
     try:

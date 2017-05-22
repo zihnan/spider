@@ -1,8 +1,14 @@
+# encoding=UTF-8
+import codecs
 import re
+import json
 import lxml
+import numpy as np
 import os
 import sys
 from lxml import html
+from sklearn.externals import joblib
+from sklearn_extensions.extreme_learning_machines import ELMClassifier
 
 from extractor import Extractor
 
@@ -16,8 +22,17 @@ class HttpExtractor(Extractor):
         if 'url' in kwargs:
             self.url = str(kwargs['url']).rstrip()
             self.domain = self.get_domain_name(self.url)
+        if 'tfidf_percent' in kwargs:
+            if isinstance(kwargs['tfidf_percent'], float):
+                self.tfidf_percent = kwargs['tfidf_percent']
+            else:
+                self.tfidf_percent = 0.9
+        else:
+            self.tfidf_percent = 0.9
+        sys.stderr.write('TFIDF-percent: ' + str(self.tfidf_percent) + '\n')
         try:
             self.html_tree = html.fromstring(html_str)
+                    
         except lxml.etree.ParserError:
             self.empty = True
             sys.stderr.write('no a no link\n')
@@ -35,12 +50,50 @@ class HttpExtractor(Extractor):
         self.frame = self.get_iframe() + self.get_frame()
         self.redirect = self.get_redirect()
         self.script_tags = self.get_script_tags()
+        self.title = self.get_title()
         
+        self.bytes_distribution = self.__get_bytes_distribution(html_str)
         
-        self.features = [self.null_a_tag, self.external_a, self.is_ssl]
+        self.features = [self.get_kbytes, self.is_frame, self.is_meta_redirect, self.is_meta_base64_redirect, self.is_form, self.is_input_submit, self.is_button_submit, self.same_extern_domain_script_rate, self.script_block_rate, self.style_block_rate, self.external_a_tag_same_domain,self.null_a_tag,self.same_external_domain_link_rate, self.same_external_domain_img_rate, self.get_title_feature]
         
-    def is_ssl(self):
-        return self.url.startswith('https')
+    def get_title(self):
+        if self.empty:
+            return []
+        return self.html_tree.xpath('//title/text()')
+        
+    def get_title_feature(self):
+        if not self.title:
+            return 0
+        with codecs.open('tfidf2 {:d}% term'.format(int(self.tfidf_percent * 100)), 'r', encoding='utf-8') as f:
+            tf_position = json.loads(f.readline().rstrip())
+            tf_term = f.readline().rstrip().split(' ')
+            sys.stderr.write('Load tfidf-{:d}%-elm.model\n'.format(int(self.tfidf_percent * 100)))
+            elm = joblib.load('tfidf-{:d}%-elm.model'.format(int(self.tfidf_percent * 100)))
+            
+            if self.title:
+                title_list = self.__split_title(self.title)
+            else:
+                return 0
+            elm_vector = [[0] * len(tf_term)]
+            for index, t in enumerate(tf_term):
+                if t.lower() in title_list:
+                    elm_vector[0][index] = 1
+            score = elm.predict(np.array(elm_vector))
+            score = score.tolist()
+            if isinstance(score, list):
+                return score[0]
+            else:
+                return score
+        
+    def __split_title(self, title):
+        delimiter = ['/', '?', '.', '=', '-', '_', '!',':', ';', '|', '(', ')', ',', '@', '"', "'", '[', ']',u'，', u'、', u'！', u'【', u'】', u'“', u'”', u'・', u'『', u'』', u'｜', u'‹', u'›', u'丨', u'¥']
+        tf_test = []
+        for t in title:
+            t = t.strip()
+            for d in delimiter:
+                t = t.replace(d, ' ')
+            tf_test += [i.lower() for i in t.split(' ') if i]
+        return tf_test
         
     def __get_bytes_distribution(self, html_str):
         temp = [0]*256
@@ -49,6 +102,10 @@ class HttpExtractor(Extractor):
                 temp[ord(c)] += 1
         return temp
         
+    def get_bytes_distribution(self):
+        if not self.empty:
+            return self.bytes_distribution
+        return []
         
     def get_bytes(self, html_str):
         return len(html_str)
@@ -103,9 +160,8 @@ class HttpExtractor(Extractor):
         return 0.0
 
     def set_url(self, url):
-        print 'sdllsl'
         self.url = url
-        print self.url
+        sys.stderr.write(self.url)
         return self
 
     def get_url(self):
@@ -204,7 +260,7 @@ class HttpExtractor(Extractor):
             return self.html_tree.xpath('//a')
         return []
     
-    def external_a(self):
+    def external_a_tag_same_domain(self):
         if self.empty:
             return 0.0
         urls = {}
@@ -223,9 +279,11 @@ class HttpExtractor(Extractor):
                 null_url += 1
         m = 0
         for domain_name in urls:
-            if domain_name != '.' and domain_name != self.domain:
-                m += urls[domain_name]
-        return m
+            if urls[domain_name] > m and domain_name != '.' and domain_name != self.domain:
+                m = urls[domain_name]
+        if total > 0:
+            return float(m)/float(total)
+        return 0
     
     def null_a_tag(self):
         if self.empty:
@@ -244,7 +302,10 @@ class HttpExtractor(Extractor):
                     urls[domain_name] = 1
             else:
                 null_url += 1
-        return null_url
+        m = null_url
+        if total > 0:
+            return float(m)/float(total)
+        return 0
     
     def get_link_tags(self):
         if not self.empty:
@@ -349,6 +410,24 @@ class HttpExtractor(Extractor):
             return float(m)/float(total)
         return 0.0
         
+    def title_features(self):
+        title_list = self.html_tree.xpath('//title/text()')
+        with codecs.open('tfidf-term', 'r', encoding='utf-8') as f:
+            f.readline()
+            tfidf_set = f.readline().rstrip().split(' ')
+        temp = [0] * len(tfidf_set)
+        if not title_list:
+            return temp
+        else:
+            delimiter = ['/', '?', '.', '=', '-', '_', '!',':', ';', '|', '(', ')', ',', '@', '"', "'", '[', ']',u'，', u'、', u'！', u'【', u'】', u'“', u'”', u'・', u'『', u'』', u'｜', u'‹', u'›', u'丨', u'¥']
+            for title in title_list:
+                for d in delimiter:
+                    title = title.replace(d, ' ')
+                for t in title.split().split(' '):
+                    if t in tfidf_set:
+                        temp[tfidf_set.index(t)] += 1
+            return temp
+        
     def __add__(self, other):
         self.a_tags += other.a_tags
         self.link_tags += other.link_tags
@@ -361,5 +440,9 @@ class HttpExtractor(Extractor):
         self.total_rows += other.total_rows
         self.script_tags += other.script_tags
         self.bytes += other.bytes
+        self.title += other.title
+        
+        for i in range(256):
+            self.bytes_distribution[i] += other.bytes_distribution[i]
         
         return self

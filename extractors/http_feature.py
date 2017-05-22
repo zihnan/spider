@@ -21,6 +21,10 @@ class HttpExtractor(Extractor):
         except lxml.etree.ParserError:
             self.empty = True
             sys.stderr.write('no a no link\n')
+        except lxml.etree.XMLSyntaxError as e:
+            print html_str
+            print str(e)
+            self.empty = True
         
         striped_html_str = self.__striped_html_str(html_str)
         self.total_rows = len(striped_html_str.split('\n'))

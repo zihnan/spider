@@ -272,8 +272,16 @@ class DownloadHTTPFile(DownloadFile):
                         self.err = str(i)
                         return False
                 if re.search('^.*suspended.*$', str(extract_title).lower()) is not None:
-                    self.logger('Error with http status code : suspended')
                     self.err = 'suspended'
+                    self.logger('Error with http status code : ' + self.err)
+                    return False
+                if re.search('^(.* |.* can|.* could|)not(hing| be|) found.*$', str(extract_title).lower()):
+                    self.err = 'page not found'
+                    self.logger('Error with http status code : ' + self.err)
+                    return False
+                if re.search('^(.* |.*suspected |)phishing.*$', str(extract_title).lower()):
+                    self.err = 'suspected phishing'
+                    self.logger('Error with http status code : ' + self.err)
                     return False
 
         for i in self.dont_download_err_codes:
