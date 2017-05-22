@@ -65,20 +65,30 @@ class HttpExtractor(Extractor):
         if not self.title:
             return 0
         with codecs.open('tfidf2 {:d}% term'.format(int(self.tfidf_percent * 100)), 'r', encoding='utf-8') as f:
+            # nothing
             tf_position = json.loads(f.readline().rstrip())
+            # get tf-idf terms
             tf_term = f.readline().rstrip().split(' ')
             sys.stderr.write('Load tfidf-{:d}%-elm.model\n'.format(int(self.tfidf_percent * 100)))
+            # loading completed model
             elm = joblib.load('tfidf-{:d}%-elm.model'.format(int(self.tfidf_percent * 100)))
             
             if self.title:
                 title_list = self.__split_title(self.title)
             else:
                 return 0
+            
+            # initializing a empty features vector of elm model
             elm_vector = [[0] * len(tf_term)]
+            # mapping data into the features vector of elm model
             for index, t in enumerate(tf_term):
                 if t.lower() in title_list:
                     elm_vector[0][index] = 1
+                    
+            # classifing the title feature where in the elm model
             score = elm.predict(np.array(elm_vector))
+            # must convert to list, because the output of elm.predict is numpy.array
+            # which cannot using to train other model directly
             score = score.tolist()
             if isinstance(score, list):
                 return score[0]
