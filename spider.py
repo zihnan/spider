@@ -170,7 +170,7 @@ class DownloadHTTPFile(DownloadFile):
         
         ua = UserAgent()
         user_agent = ua.random
-        headers = {'User-Agent': user_agent, 'Connection': 'close'}
+        headers = {'User-Agent': user_agent, 'Connection': 'close', 'Accept-Encoding':''}
         
         try:
             response = requests.get(self.url, timeout=30, headers=headers, stream=True)
@@ -189,6 +189,10 @@ class DownloadHTTPFile(DownloadFile):
             print "Timeout : %s" % e.message
             return
         except ContentDecodingError as e:
+            self.error_handler("%s : ContentDecodingError" % (self.url))
+            print "ContentDecodingError : %s" % e.message
+            return
+            '''
             if 'Accept-Encoding' not in headers:
                 headers['Accept-Encoding'] = ''
                 try:
@@ -197,6 +201,7 @@ class DownloadHTTPFile(DownloadFile):
                     self.error_handler("%s : ContentDecodingError" % (self.url))
                     print "ContentDecodingError : %s" % e.message
                     return
+            '''
         except ChunkedEncodingError as e:
             # The server declared chunked encoding but sent an invalid chunk.
             self.error_handler("%s : ChunkedEncodingError" % (self.url))
@@ -235,13 +240,16 @@ class DownloadHTTPFile(DownloadFile):
         temp = ''
         pre_time = time.time()
         content_iter = response.iter_lines()
-        for row in content_iter:
-            delta = time.time() - pre_time
-            if delta > download_time_limit:
-                temp = ''
-                break
-            else:
-                temp += row
+        try:
+            for row in content_iter:
+                delta = time.time() - pre_time
+                if delta > download_time_limit:
+                    temp = ''
+                    break
+                else:
+                    temp += row + '\n'
+        except Exception as e:
+            print str(e)
         return temp
             
     dont_download_err_codes = [403, 404, 500, 503]
