@@ -1,3 +1,5 @@
+# coding=UTF-8
+import codecs
 import commands
 import dns.resolver
 import ftplib
@@ -78,7 +80,8 @@ class DownloadFile:
         status = commands.getstatusoutput('whois %s' % domain_name)
         s += status[1]
         s += '\n<=WHOIS END=>\n'
-        return get_utf8(s)
+        # return get_utf8(s)
+        return s
 
     def logger(self, msg):
         if self.verbose:
@@ -107,7 +110,7 @@ class DownloadFTPFile(DownloadFile):
         
         try:
             self.logger('Opening file %s ...' % file_name)
-            self.output_file = open(file_name, 'w')
+            self.output_file = open(file_name, 'w', encoding='utf-8')
             self.output_file.write(self.url + '\n')
 
             self.logger('Requesting %s ...' % self.url)
@@ -239,9 +242,10 @@ class DownloadHTTPFile(DownloadFile):
                 break
             else:
                 temp += row
-        return temp    
+        return temp
             
     dont_download_err_codes = [403, 404, 500, 503]
+    page_not_found_str = ['pila flag poles', 'error | cort.as', 'seite zur zeit nicht erreichbar', 'temporarily unavailable', 'ShrinkThisLink.com - Free link shrinker', 'monequipemobfree.com', 'Nom de domaine Gratuit avec Azote.org et SANS PUBLICITE', 'ghak.com - 这个网站可出售。 - 最佳的ghak 来源和相关信息。']
     def is_alive(self, response):
         #global error_log
         self.content = self._get_content(response)
@@ -267,11 +271,19 @@ class DownloadHTTPFile(DownloadFile):
             for extract_title in extract_titles:
                 extract_title = extract_title.encode("utf-8")
                 for i in self.dont_download_err_codes:
-                    if re.search('^(.*\d\D+|\D*)'+str(i)+'(\D+\d.*|\D*)$', extract_title) is not None:
+                    if re.search('^(.*\d\D+|\D*)'+str(i)+'(\D+\d.*|\D*)$', extract_title):
                         self.logger('Error with http status code : %s' % str(i))
                         self.err = str(i)
                         return False
-                if re.search('^.*suspended.*$', str(extract_title).lower()) is not None:
+                if re.search('^.*suspended.*$', str(extract_title).lower()):
+                    self.err = 'suspended'
+                    self.logger('Error with http status code : ' + self.err)
+                    return False
+                if re.search('^.*linkbucks.com - get your share!.*$', str(extract_title).lower()):
+                    self.err = 'suspended(linkbucks)'
+                    self.logger('Error with http status code : ' + self.err)
+                    return False
+                if re.search('^contact support$', str(extract_title).lower()):
                     self.err = 'suspended'
                     self.logger('Error with http status code : ' + self.err)
                     return False
@@ -280,9 +292,14 @@ class DownloadHTTPFile(DownloadFile):
                     self.logger('Error with http status code : ' + self.err)
                     return False
                 if re.search('^(.* |.*suspected |)phishing.*$', str(extract_title).lower()):
-                    self.err = 'suspected phishing'
+                    self.err = 'suspend(suspected phishing)'
                     self.logger('Error with http status code : ' + self.err)
                     return False
+                for i in self.page_not_found_str:
+                    if re.search('^.*' + i.lower() + '.*$', str(extract_title).lower()):
+                        self.err = 'page not found({})'.format(i)
+                        self.logger('Error with http status code : ' + self.err)
+                        return False
 
         for i in self.dont_download_err_codes:
             if i == response.status_code:
@@ -341,6 +358,8 @@ class DownloadHTTPFile(DownloadFile):
         s += self.content
         s += '\n<=HTTP END=>\n'
         return get_utf8(s)
+        #sys.stderr.write('======> ' + type(s) + '\n')
+        #return s
 
     def get_headers(self, response):
         s = '\n<=HEADER BEGIN=>\n'
@@ -349,8 +368,7 @@ class DownloadHTTPFile(DownloadFile):
             s += '%s: %s\n' % (i, response.headers[i])
         s += '\n<=HEADER END=>\n'
         return get_utf8(s)
-
-import codecs
+        #return s
 
 start_number = 0
 def crawl_from_file(file_path, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
