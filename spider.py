@@ -85,17 +85,17 @@ class DownloadFile:
 
     def logger(self, msg):
         if self.verbose:
-            print msg
+            sys.stderr.write(str(msg) + '\n')
 
 class DownloadFTPFile(DownloadFile):
     file = None
     def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
-        self.url = url
+        self.url = urllog
         self.output_file_name = outputfile
         self.verbose = verbose
         self.domain_name = self.get_domain_name(url)
         self.outputdir = outputdir
-        self.error_handler = error_handler
+        self.error_handler = error_handlerlog
     
     def run(self):
         #global error_log
@@ -110,7 +110,7 @@ class DownloadFTPFile(DownloadFile):
         
         try:
             self.logger('Opening file %s ...' % file_name)
-            self.output_file = open(file_name, 'w', encoding='utf-8')
+            self.output_file = codecs.open(file_name, 'w', encoding='utf-8')
             self.output_file.write(self.url + '\n')
 
             self.logger('Requesting %s ...' % self.url)
@@ -174,6 +174,7 @@ class DownloadHTTPFile(DownloadFile):
         
         try:
             response = requests.get(self.url, timeout=30, headers=headers, stream=True)
+            #response.encoding = 'utf-8'
         except ConnectionError as e:
             self.error_handler("%s : ConnectionError" % (self.url))
             print "ConnectionError : %s" % str(e)
@@ -217,7 +218,7 @@ class DownloadHTTPFile(DownloadFile):
             return
         try:
             self.logger('Opening file %s ...' % file_name)
-            self.output_file = open(file_name, 'w')
+            self.output_file = codecs.open(file_name, 'w', encoding='utf-8')
             self.output_file.write(self.url + '\n')
 
             self.logger('Requesting %s ...' % self.url)
@@ -229,28 +230,12 @@ class DownloadHTTPFile(DownloadFile):
             self.download_file(response)
             self.output_file.write(self.get_timer(total_time))
         except IOError as e:
-            print "I/O error({0}): {1}".format(e.errno, e.strerror)
+            self.error_handler("I/O error({0}): {1}".format(e.errno, e.strerror))
+            sys.stderr.write("I/O error({0}): {1}\n".format(e.errno, e.strerror))
         finally:
             self.logger('\tClosing file %s ...' % file_name)
             self.output_file.close()
             response.close()
-            
-    def _get_content(self, response):
-        download_time_limit = 60*60*10
-        temp = ''
-        pre_time = time.time()
-        content_iter = response.iter_lines()
-        try:
-            for row in content_iter:
-                delta = time.time() - pre_time
-                if delta > download_time_limit:
-                    temp = ''
-                    break
-                else:
-                    temp += row + '\n'
-        except Exception as e:
-            print str(e)
-        return temp
             
     dont_download_err_codes = [403, 404, 500, 503]
     page_not_found_str = ['pila flag poles', 'error | cort.as', 'seite zur zeit nicht erreichbar', 'temporarily unavailable', 'ShrinkThisLink.com - Free link shrinker', 'monequipemobfree.com', 'Nom de domaine Gratuit avec Azote.org et SANS PUBLICITE', 'ghak.com - 这个网站可出售。 - 最佳的ghak 来源和相关信息。']
@@ -332,9 +317,12 @@ class DownloadHTTPFile(DownloadFile):
                 else:
                     break
                     
-        self.logger('\tDownloading %s ...' % response.url)
-        self.output_file.write(self.get_headers(response))
-        self.output_file.write(self.get_content(response))
+        try:
+            self.logger('\tDownloading %s ...' % response.url)
+            self.output_file.write(self.get_headers(response))
+            self.output_file.write(self.get_content(response))
+        except Exception as e:
+            self.error_handler("%s : %s" % (self.url, str(e)))
 
     def is_redirect_cycle(self, response):
         self.redirect_cycle = {}
@@ -360,15 +348,32 @@ class DownloadHTTPFile(DownloadFile):
             s += '%s:%d\n' % (key,self.redirect_cycle[key])
         s += "\n<=CYCLING REDIRECT WARNING END=>\n"
         return get_utf8(s)
-
+        
+    def _get_content(self, response):
+        download_time_limit = 60*60*10
+        temp = u''
+        pre_time = time.time()
+        content_iter = response.iter_lines()
+        print response.encoding
+        for row in content_iter:
+            delta = time.time() - pre_time
+            if delta > download_time_limit:
+                temp = ''
+                break
+            else:
+                try:
+                    temp += row.decode('utf-8') + '\n'
+                except UnicodeDecodeError as e:
+                    self.error_handler("%s : %s" % (self.url, str(e)))
+                    temp += row.decode(response.encoding) + '\n'
+        return temp
+            
     def get_content(self, response):
         s = '\n<=HTTP BEGIN=>\n'
         s += self.content
         s += '\n<=HTTP END=>\n'
-        return get_utf8(s)
-        #sys.stderr.write('======> ' + type(s) + '\n')
-        #return s
-
+        return s
+        
     def get_headers(self, response):
         s = '\n<=HEADER BEGIN=>\n'
         s += 'HTTP/%0.1f %d %s\n' % ((float)(response.raw.version/10.0), response.status_code, response.reason)
@@ -381,12 +386,12 @@ class DownloadHTTPFile(DownloadFile):
 start_number = 0
 def crawl_from_file(file_path, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
     try:
-      with codecs.open(file_path,'r', encodint='utf8') as f:
+      with codecs.open(file_path,'r', encoding='utf8') as f:
         for i, url in enumerate(f.readlines()):
            print '%d STARTING ... %s ' % (i + start_number, url.rstrip())
            a = downloader(url.rstrip(), outputfile=str(i + start_number), verbose=verbose, outputdir=outputdir, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler)
            a.run()
-    except Except as e:
+    except Exception as e:
         print str(e)
 
 def downloader(url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
@@ -418,7 +423,7 @@ def get_utf8(s):
     return s.encode('utf-8')
 
 def error_handler(msg):
-    with open('error.log', 'a') as f:
+    with codecs.open('error.log', 'a', encoding='utf-8') as f:
         f.write(get_utf8(msg) + '\n')
 
 error_log = None
@@ -453,10 +458,11 @@ def main(argv):
     except getopt.GetoptError as err:
         print str(err)
         help_message()
+    except Exception as e:
+        print str(e)
     finally:
         #error_log.close()
         sys.exit(2)
-
 if __name__ == '__main__':
     main(sys.argv[1:])
-
+    
