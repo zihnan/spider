@@ -1,5 +1,6 @@
 import itertools
 import re
+import sys
 
 class Extractor(object): 
     features = []
@@ -32,9 +33,9 @@ class Extractor(object):
         if self.numeric:
             temp = self.__to_numeric(temp)
         if self.verbose:
-            print '{name} length: {len}'.format(name=self.__class__.__name__, len=len(temp))
-            print '{:>10} ==> {}'.format('', str([i.__name__ for i in self.features]))
-            print '{:>10} ==> {}'.format('', str(temp))
+            sys.stderr.write('{name} length: {len}\n'.format(name=self.__class__.__name__, len=len(temp)))
+            sys.stderr.write('{:>10} ==> {}\n'.format('', str([i.__name__ for i in self.features])))
+            sys.stderr.write('{:>10} ==> {}\n'.format('', str(temp)))
         return temp
     
     # check whether contains 'JavaScript:document.location.href'
