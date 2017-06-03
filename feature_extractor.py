@@ -71,6 +71,7 @@ class FeatureExtractor:
         instance = self.extractors['url'](self.data_list[0]).set_verbose(self.verbose)
         instance.set_numeric(self.numeric)
         features += instance.extract()
+        self.extractors_features['url'] = features
         
         f2 = features
         for extractor_name in self.extractors:
@@ -101,7 +102,7 @@ class FeatureExtractor:
     def __split_data(self): 
         entries = 0
         temp_block = ''
-        
+        self.data_block['url'] = self.data_list[0]
         for l in self.data_list:
             if re.match('^<=.* BEGIN=>$', l.strip()):
                 entries += 1
@@ -246,7 +247,7 @@ def main(argv):
     parser.add_argument('--startwith', help='ouput file name offset', default=0, action='store', type=int)
     parser.add_argument('--quiet', help='display information', default=False, action='store_true')
     parser.add_argument('--debug', help='display debug information', default=False, action='store_true')
-    parser.add_argument('--select', help='select extractors directory', metavar='EXTRACTORS_DIRECTORY', default='extractors', action='store')
+    parser.add_argument('--select', help='select extractors directory', metavar='EXTRACTORS_DIRECTORY', default=_extractors_fold_name, action='store')
     parser.add_argument('sample_file', nargs='+',type=str, help='sample file formated by spyder.py')
     parser.add_argument('--tfidf_percent', help='tfidf percent of title feature', type=float,  metavar='TFIDF_PERCENT', default='0.9', action='store')
     args = parser.parse_args()
