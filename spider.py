@@ -8,9 +8,11 @@ import re
 import requests
 import sys
 import time
+from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from functools import wraps
 from lxml import html
+from lxml import etree
 from lxml.etree import *
 from requests.exceptions import *
 
@@ -78,24 +80,35 @@ class DownloadFile:
     def get_whois(self, domain_name):
         s = '\n<=WHOIS BEGIN=>\n'
         status = commands.getstatusoutput('whois %s' % domain_name)
-        s += status[1]
+        temp = status[1]
+        for index,row in enumerate(temp):
+            try:
+                s += row
+            except:
+                print index
+                print row
+                s += row.decode('utf-8', errors='replace')
         s += '\n<=WHOIS END=>\n'
-        # return get_utf8(s)
-        return s
+        #return get_utf8(s)
+        return s.decode('utf-8')
 
     def logger(self, msg):
         if self.verbose:
-            sys.stderr.write(str(msg) + '\n')
+            try:
+                sys.stderr.write(str(msg) + '\n')
+            except Exception as e:
+                print 'stop'
+                return
 
 class DownloadFTPFile(DownloadFile):
     file = None
     def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
-        self.url = urllog
+        self.url = url
         self.output_file_name = outputfile
         self.verbose = verbose
         self.domain_name = self.get_domain_name(url)
         self.outputdir = outputdir
-        self.error_handler = error_handlerlog
+        self.error_handler = error_handler
     
     def run(self):
         #global error_log
@@ -136,9 +149,14 @@ class DownloadFTPFile(DownloadFile):
             ftp.cwd(path)
         
         pre_time = time.time()
-        ftp.retrbinary("RETR " + filename , self.output_file.write)
+        with open('.' + filename, 'w+b') as f:
+            ftp.retrbinary('RETR ' + filename, f.write)
+        #ftp.retrbinary("RETR " + filename , self.output_file.write)
         ftp.close()
         total_time = time.time() - pre_time
+        with open('.' + filename, 'r+b') as f2:
+            for r in f2.readlines():
+                self.output_file.write(r.decode('utf-8', errors='replace'))
         self.output_file.write('\n<=HTTP END=>\n')
         self.output_file.write(self.get_timer(total_time))
 
@@ -146,7 +164,7 @@ class DownloadHTTPFile(DownloadFile):
     file = None
     redirect_cycle = {}
     
-    def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
+    def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None, stream=True):
         self.url = url
         self.output_file_name = outputfile
         self.verbose = verbose
@@ -154,6 +172,7 @@ class DownloadHTTPFile(DownloadFile):
         self.domain_name = self.get_domain_name(url)
         self.outputdir = outputdir
         self.error_handler = error_handler
+        self.stream = stream
 
     def run(self):
         #global error_log
@@ -173,7 +192,7 @@ class DownloadHTTPFile(DownloadFile):
         headers = {'User-Agent': user_agent, 'Connection': 'close', 'Accept-Encoding':''}
         
         try:
-            response = requests.get(self.url, timeout=30, headers=headers, stream=True)
+            response = requests.get(self.url, timeout=(30,180), headers=headers, stream=self.stream)
             #response.encoding = 'utf-8'
         except ConnectionError as e:
             self.error_handler("%s : ConnectionError" % (self.url))
@@ -208,13 +227,32 @@ class DownloadHTTPFile(DownloadFile):
             self.error_handler("%s : ChunkedEncodingError" % (self.url))
             print "ChunkedEncodingError : %s" % e.message
             return
+        except InvalidSchema as e:
+            self.error_handler("%s : InvalidSchema" % (self.url))
+            print "InvalidSchema : %s" % e.message
+            return
         
         total_time = time.time() - pre_time
         self.logger('Checking alive ... : %s' % self.url)
-        if not self.is_alive(response):
-            self.error_handler('%s : %s' % (self.url, self.err))
+        try:
+            is_dead = not self.is_alive(response)
+        except ConnectionError as e:
+            print 'ssssssssssssssss'
+            self.stream = False
+            headers = {'User-Agent': user_agent, 'Accept-Encoding':''}
+            try:
+                response = requests.get(self.url, timeout=30, headers=headers, stream=self.stream)
+            except Exception as e:
+                self.error_handler("%s : ConnectionError" % (self.url))
+                print "ConnectionError : %s" % str(e)
+                return
+            print 'dddddddddddddd'
+            is_dead = not self.is_alive(response)
+            
+        if is_dead:
+            self.error_handler(u'%s : %s' % (self.url, self.err))
             #error_log.write('%s : %s' % (self.url, self.err))
-            print '%s : %s' % (self.url, self.err)
+            print u'%s : %s' % (self.url, self.err)
             return
         try:
             self.logger('Opening file %s ...' % file_name)
@@ -232,19 +270,32 @@ class DownloadHTTPFile(DownloadFile):
         except IOError as e:
             self.error_handler("I/O error({0}): {1}".format(e.errno, e.strerror))
             sys.stderr.write("I/O error({0}): {1}\n".format(e.errno, e.strerror))
+        except Exception as e:
+            print 'ddddddddddddddddddddddddddddddddddd'
+            print str(e)
         finally:
             self.logger('\tClosing file %s ...' % file_name)
             self.output_file.close()
             response.close()
             
     dont_download_err_codes = [403, 404, 500, 503]
-    page_not_found_str = ['pila flag poles', 'error | cort.as', 'seite zur zeit nicht erreichbar', 'temporarily unavailable', 'ShrinkThisLink.com - Free link shrinker', 'monequipemobfree.com', 'Nom de domaine Gratuit avec Azote.org et SANS PUBLICITE', 'ghak.com - 这个网站可出售。 - 最佳的ghak 来源和相关信息。']
+    page_not_found_str = ['pila flag poles', 'error | cort.as', 'seite zur zeit nicht erreichbar', 'temporarily unavailable', 'ShrinkThisLink.com - Free link shrinker', 'monequipemobfree.com', 'Nom de domaine Gratuit avec Azote.org et SANS PUBLICITE', 'ooops']
+    page_not_found_str_utf8 = [u'这个网站可出售', u'该网站正在出售']
     def is_alive(self, response):
+        if 'Content-Type' in response.headers:
+            if response.headers['Content-Type'].startswith('image') or response.headers['Content-Type'].startswith('application'):
+                self.err = 'not web page({})'.format(response.headers['Content-Type'])
+                return False
         #global error_log
         self.content = self._get_content(response)
         try:
             tree = html.fromstring(self.content)
             extract_titles = tree.xpath('//title/text()')
+            '''
+            soup = BeautifulSoup(self.content)
+            extract_titles = soup.findAll('title')
+            print extract_titles
+            '''
         except XMLSyntaxError as e:
             print str(e)
             self.err = str(e)
@@ -252,17 +303,21 @@ class DownloadHTTPFile(DownloadFile):
             #error_log.write("%s : %s" % (self.url, str(e)))
             return False
         except ParserError as e:
-            print e
+            print str(e)
             self.err = str(e)
             self.error_handler("%s : %s" % (self.url, str(e)))
             return False
         except UnicodeDecodeError as e:
             tree = html.fromstring(get_unicode(self.content))
             extract_titles = tree.xpath('//title/text()')
-
+        except Exception as e:
+            if isinstance(self.content, unicode):
+                tree = html.fromstring(self.content.encode('UTF-8'))
+                extract_titles = tree.xpath('//title/text()')
+        
         if extract_titles:
-            for extract_title in extract_titles:
-                extract_title = extract_title.encode("utf-8")
+            for origin in extract_titles:
+                extract_title = origin.encode('utf-8')
                 for i in self.dont_download_err_codes:
                     if re.search('^(.*\d\D+|\D*)'+str(i)+'(\D+\d.*|\D*)$', extract_title):
                         self.logger('Error with http status code : %s' % str(i))
@@ -290,16 +345,21 @@ class DownloadHTTPFile(DownloadFile):
                     return False
                 for i in self.page_not_found_str:
                     if re.search('^.*' + i.lower() + '.*$', str(extract_title).lower()):
-                        self.err = 'page not found({})'.format(i)
+                        self.err = u'page not found({})'.format(i)
                         self.logger('Error with http status code : ' + self.err)
                         return False
-
+                for i in self.page_not_found_str_utf8:
+                    if i in origin:
+                        self.err = u'page not found({})'.format(i)
+                        self.logger(u'Error with http status code : {}'.format(self.err))
+                        return False
+                        
         for i in self.dont_download_err_codes:
             if i == response.status_code:
                 self.logger('Error with http status code : %s' % str(i))
                 self.err = str(i)
                 return False
-
+                
         return True
 
     def download_file(self, response):
@@ -349,23 +409,68 @@ class DownloadHTTPFile(DownloadFile):
         s += "\n<=CYCLING REDIRECT WARNING END=>\n"
         return get_utf8(s)
         
+    def __get_html_charset(self, response):
+        soup = BeautifulSoup(response.text, 'html.parser')
+        meta = soup.find('meta', attrs={'http-equiv':'content-type'})
+        if meta:
+            contents = meta[0]['content'].lower().split(';')
+            for content in contents:
+                if re.match('^.*charset.*$', content.lower()):
+                    return content.split('=')[0].lower()
+        return None
+        
     def _get_content(self, response):
+        if not self.stream:
+            charset = self.__get_html_charset(response)
+            if charset != 'utf-8':
+                response.encoding = charset
+            return response.text
         download_time_limit = 60*60*10
         temp = u''
         pre_time = time.time()
-        content_iter = response.iter_lines()
+        try:
+            content_iter = response.iter_lines()
+            origin = response.iter_lines()
+        except requests.Timeout as e:
+            print 'ddd'
+            print temp
+            print str(e)
         print response.encoding
-        for row in content_iter:
-            delta = time.time() - pre_time
-            if delta > download_time_limit:
-                temp = ''
-                break
-            else:
-                try:
-                    temp += row.decode('utf-8') + '\n'
-                except UnicodeDecodeError as e:
-                    self.error_handler("%s : %s" % (self.url, str(e)))
-                    temp += row.decode(response.encoding) + '\n'
+        charset = 'utf-8'
+        try:
+            for row in content_iter:
+                delta = time.time() - pre_time
+                if delta > download_time_limit:
+                    temp = ''
+                    break
+                else:
+                    try:
+                        '''
+                        res = re.match('^.*<meta ([^>]*)>.*$', row.lower())
+                        if res and re.match('^.*http-equiv=.Content-Type.*$', res.group(1).lower()) and res.group(1).find(';') != -1:
+                            contents = res.group(1).split(';')
+                            for content in contents:
+                                if re.match('^.*charset.*$', content.lower()):
+                                    charset = content.split('=')[0].lower()
+                                    if charset != 'utf-8':
+                                        response.encoding = charset
+                                        temp = u''
+                                        content_iter = origin
+                                        continue
+                                        '''
+                        temp += row.decode('utf-8') + '\n'
+                    except UnicodeDecodeError as e:
+                        self.error_handler("%s : %s" % (self.url, str(e)))
+                        if response.encoding and response.encoding.find(',') == -1:
+                                temp += row.decode(response.encoding, errors='replace') + '\n'
+                        elif response.encoding and response.encoding[:response.encoding.find(',')] != 'ISO-8859-1':
+                                temp += row.decode(response.encoding[:response.encoding.find(',')], errors='replace') + '\n'
+                        else:
+                            temp += row.decode('utf-8', errors='ignore') + '\n'
+        except requests.Timeout as e:
+            print 'ddd'
+            print temp
+            print str(e)
         return temp
             
     def get_content(self, response):
@@ -384,20 +489,27 @@ class DownloadHTTPFile(DownloadFile):
         #return s
 
 start_number = 0
-def crawl_from_file(file_path, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
+def crawl_from_file(file_path, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None, stream=False):
     try:
       with codecs.open(file_path,'r', encoding='utf8') as f:
         for i, url in enumerate(f.readlines()):
            print '%d STARTING ... %s ' % (i + start_number, url.rstrip())
-           a = downloader(url.rstrip(), outputfile=str(i + start_number), verbose=verbose, outputdir=outputdir, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler)
-           a.run()
+           a = downloader(url.rstrip(), outputfile=str(i + start_number), verbose=verbose, outputdir=outputdir, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler, stream=stream)
+           if a:
+            a.run()
     except Exception as e:
         print str(e)
 
-def downloader(url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None):
-    if url.startswith('http'):
-        return DownloadHTTPFile(url, outputdir=outputdir, outputfile=outputfile, verbose=verbose, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler)
-    elif url.startswith('ftp:'):
+def downloader(url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None, stream=False):
+    if url.lower().startswith('http'):
+        if url.lower().endswith('ico') or url.lower().endswith('jpg') or url.lower().endswith('png') or url.lower().endswith('pdf') or url.lower().endswith('bmp') or url.lower().endswith('tiff'):
+            e = 'image file'
+            if error_handler:
+                error_handler("{} : {}".format(url, str(e)))
+            sys.stderr.write("{} : {}\n".format(url, str(e)))
+            return None
+        return DownloadHTTPFile(url, outputdir=outputdir, outputfile=outputfile, verbose=verbose, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler, stream=stream)
+    elif url.lower().startswith('ftp:'):
         return DownloadFTPFile(url, outputdir=outputdir, outputfile=outputfile, verbose=verbose, error_handler=error_handler)
 
 def get_domain_name(url):
@@ -424,19 +536,20 @@ def get_utf8(s):
 
 def error_handler(msg):
     with codecs.open('error.log', 'a', encoding='utf-8') as f:
-        f.write(get_utf8(msg) + '\n')
+        f.write(msg + '\n')
 
 error_log = None
 
 def main(argv):
     input_file = None
     verbose = False
+    stream = False
     url = None
     redirect_cycle_times = 2
     output_dir = None
     global start_number
     try:
-        opts,args = getopt.getopt(argv, 'hi:vu:d:', ['help',' inputfile=', 'url=', 'outputdir=', 'startwith='])
+        opts,args = getopt.getopt(argv, 'hi:vu:d:', ['help',' inputfile=', 'url=', 'outputdir=', 'startwith=', 'stream'])
         for opt,arg in opts:
             if opt in ('-v'):
                 verbose = True
@@ -450,11 +563,13 @@ def main(argv):
                 output_dir = arg
             elif opt in ('--startwith='):
                 start_number = int(arg)
+            elif opt in ('--stream'):
+                stream = True
         #error_log = open('error.log','a')
         if input_file is not None:
-            crawl_from_file(input_file, outputdir=output_dir, verbose=verbose, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler)
+            crawl_from_file(input_file, outputdir=output_dir, verbose=verbose, redirect_cycle_times=redirect_cycle_times, error_handler=error_handler, stream=stream)
         elif url is not None:
-            downloader(url, verbose=verbose, outputdir=output_dir,redirect_cycle_times=redirect_cycle_times, error_handler=error_handler).run()
+            downloader(url, verbose=verbose, outputdir=output_dir,redirect_cycle_times=redirect_cycle_times, error_handler=error_handler, stream=stream).run()
     except getopt.GetoptError as err:
         print str(err)
         help_message()
