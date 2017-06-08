@@ -188,8 +188,19 @@ class DownloadHTTPFile(DownloadFile):
         pre_time = time.time()
         
         ua = UserAgent()
-        user_agent = ua.random
-        headers = {'User-Agent': user_agent, 'Connection': 'close', 'Accept-Encoding':''}
+        user_agent = ua.firefox
+        print '>>>>>>>>>>>>>>>>.'
+        try:
+            user_agent = ua.random
+        except Exception as e:
+            print str(e)
+            try:
+                user_agent = ua.random
+            except Exception as e:
+                sys.stderr.write('Can not use random agent.\n')
+        
+        print '>>>>>>>>>>>>>>>>.'
+        headers = {'User-Agent': user_agent,'Connection': 'close', 'Accept-Encoding':''}
         
         try:
             response = requests.get(self.url, timeout=(30,180), headers=headers, stream=self.stream)
@@ -411,18 +422,27 @@ class DownloadHTTPFile(DownloadFile):
         
     def __get_html_charset(self, response):
         soup = BeautifulSoup(response.text, 'html.parser')
-        meta = soup.find('meta', attrs={'http-equiv':'content-type'})
-        if meta:
-            contents = meta[0]['content'].lower().split(';')
-            for content in contents:
-                if re.match('^.*charset.*$', content.lower()):
-                    return content.split('=')[0].lower()
+        metas = soup.find_all('meta')
+        if metas:
+            for meta in metas:
+                if 'content' in meta.attrs:
+                    contents = meta['content'].lower().split(';')
+                    for content in contents:
+                        if re.match('^.*charset.*$', content.lower(), re.IGNORECASE):
+                            return content.split('=')[1].lower()
+                elif 'charset' in meta.attrs:
+                    return meta['charset']
         return None
         
     def _get_content(self, response):
         if not self.stream:
             charset = self.__get_html_charset(response)
-            if charset != 'utf-8':
+            sys.stderr.write('Charset : {}\n'.format(charset))
+            if not response.encoding:
+                sys.stderr.write('no response.encoding\n')
+                response.encoding = charset
+            elif charset and charset != response.encoding.lower():
+                sys.stderr.write('different response.encoding\n')
                 response.encoding = charset
             return response.text
         download_time_limit = 60*60*10
