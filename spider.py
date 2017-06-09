@@ -164,7 +164,7 @@ class DownloadHTTPFile(DownloadFile):
     file = None
     redirect_cycle = {}
     
-    def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None, stream=True):
+    def __init__(self, url, outputfile=None, outputdir=None, verbose=False, redirect_cycle_times=2, error_handler=None, stream=False):
         self.url = url
         self.output_file_name = outputfile
         self.verbose = verbose
@@ -290,8 +290,8 @@ class DownloadHTTPFile(DownloadFile):
             response.close()
             
     dont_download_err_codes = [403, 404, 500, 503]
-    page_not_found_str = ['pila flag poles', 'error | cort.as', 'seite zur zeit nicht erreichbar', 'temporarily unavailable', 'ShrinkThisLink.com - Free link shrinker', 'monequipemobfree.com', 'Nom de domaine Gratuit avec Azote.org et SANS PUBLICITE', 'ooops']
-    page_not_found_str_utf8 = [u'这个网站可出售', u'该网站正在出售']
+    page_not_found_str = ['pila flag poles', 'error | cort.as', 'seite zur zeit nicht erreichbar', 'temporarily unavailable', 'ShrinkThisLink.com - Free link shrinker', 'monequipemobfree.com', 'Nom de domaine Gratuit avec Azote.org et SANS PUBLICITE', 'ooops', 'Warning! | There might be a problem with the requested link', '(This |)website (is|) (temporarily|currently) (unavailable|Not Available|suspended)', '(Website|site) Unavailable', "We're sorry! This account is currently unavailable | ROMARG", 'this page is not available', 'Suspend', 'Short.URL', 'Unauthorized Access']
+    page_not_found_str_utf8 = [u'这个网站可出售', u'该网站正在出售', u'가비아 호스팅 서비스:웹호스팅,웹메일 호스팅,쇼핑몰호스팅,단독서버,동영상호스팅', u'무료호스팅', u'Хостинг-Центр']
     def is_alive(self, response):
         if 'Content-Type' in response.headers:
             if response.headers['Content-Type'].startswith('image') or response.headers['Content-Type'].startswith('application'):
@@ -438,11 +438,7 @@ class DownloadHTTPFile(DownloadFile):
         if not self.stream:
             charset = self.__get_html_charset(response)
             sys.stderr.write('Charset : {}\n'.format(charset))
-            if not response.encoding:
-                sys.stderr.write('no response.encoding\n')
-                response.encoding = charset
-            elif charset and charset != response.encoding.lower():
-                sys.stderr.write('different response.encoding\n')
+            if charset != 'utf-8':
                 response.encoding = charset
             return response.text
         download_time_limit = 60*60*10
