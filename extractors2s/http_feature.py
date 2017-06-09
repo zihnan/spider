@@ -6,10 +6,12 @@ import numpy as np
 import os
 import re
 import sys
+from bs4 import BeautifulSoup
 from extractor import Extractor
 from lxml import html
 from sklearn.externals import joblib
 from sklearn_extensions.extreme_learning_machines import ELMClassifier
+
 
 class HttpExtractor(Extractor):
     frame = None
@@ -30,11 +32,17 @@ class HttpExtractor(Extractor):
             self.tfidf_percent = 0.9
         sys.stderr.write('TFIDF-percent: ' + str(self.tfidf_percent) + '\n')
         try:
+            self.html_tree = BeautifulSoup(html_str, 'html.parser')
+        except Exception as e:
+            self.empty = True
+            sys.stderr.write('no a no link\n')
+        '''
+        try:
             self.html_tree = html.fromstring(html_str)
         except lxml.etree.ParserError:
             self.empty = True
             sys.stderr.write('no a no link\n')
-        
+        '''
         striped_html_str = self.__striped_html_str(html_str)
         self.total_rows = len(striped_html_str.split('\n'))
         self.bytes = self.get_bytes(striped_html_str)
@@ -131,12 +139,12 @@ class HttpExtractor(Extractor):
 
     def get_iframe(self):
         if not self.empty:
-            return self.html_tree.xpath('//iframe')
+            return self.html_tree.find_all('iframe')
         return []
 
     def get_frame(self):
         if not self.empty:
-            return self.html_tree.xpath('//frame')
+            return self.html_tree.find_all('frame')
         return []
 
     def frame_feature(self):
@@ -155,10 +163,16 @@ class HttpExtractor(Extractor):
     def get_redirect(self):
         if not self.empty:
             redirect = []
+            for i in self.html_tree.find_all('meta'):
+                if i.get('http-equiv'):
+                    if re.match('^refresh$', i.get('http-equiv'), re.IGNORECASE):
+                        redirect.append(i)
+            '''
             for i in self.html_tree.xpath('//meta'):
               if i.get('http-equiv') is not None:
                 if re.match('^refresh$', i.get('http-equiv'), re.IGNORECASE):
                     redirect.append(i)
+                    '''
             # return self.html_tree.xpath('//meta[@http-equiv="refresh"]') + self.html_tree.xpath('//meta[@http-equiv="Refresh"]') + self.html_tree.xpath('//meta[@http-equiv="REFRESH"]')
             return redirect
         return []
@@ -196,7 +210,7 @@ class HttpExtractor(Extractor):
 
     def get_submit(self):
         if not self.empty:
-            return self.html_tree.xpath('//*[@type="submit"]')
+            return self.html_tree.find_all(type="submit")
         return []
     
     def is_input_submit(self):
@@ -219,7 +233,7 @@ class HttpExtractor(Extractor):
     
     def get_a_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//a')
+            return self.html_tree.find_all('a')
         return []
     
     def external_a_tag_same_domain(self):
@@ -271,7 +285,7 @@ class HttpExtractor(Extractor):
     
     def get_link_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//link')
+            return self.html_tree.find_all('link')
         return []
     
     def same_external_domain_link_rate(self):
@@ -302,7 +316,7 @@ class HttpExtractor(Extractor):
     
     def get_img_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//img')
+            return self.html_tree.find_all('img')
         return []
     
     def same_external_domain_img_rate(self):
@@ -333,7 +347,7 @@ class HttpExtractor(Extractor):
     
     def get_form(self):
         if not self.empty:
-            return self.html_tree.xpath('//form')
+            return self.html_tree.find_all('form')
         return None
     
     def is_form(self):
@@ -350,7 +364,7 @@ class HttpExtractor(Extractor):
     
     def get_script_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//script')
+            return self.html_tree.find_all('script')
         return []
 
     def same_extern_domain_script_rate(self):
@@ -405,7 +419,7 @@ class HttpExtractor(Extractor):
             return float(m)/float(total)
         return 0
         
-    # rule based phishy:1 legitimate:0
+    # rule based phishy:0 legitimate:1
     def rule_based(self):
         if self.external_domain_link_rate()>=0.5 :
             return 0
@@ -424,7 +438,14 @@ class HttpExtractor(Extractor):
     def get_title(self):
         if self.empty:
             return []
+        '''
         return self.html_tree.xpath('//title/text()')
+        '''
+        result = self.html_tree.find_all('title')
+        if result:
+            result = [i.string for i in result if i.string]
+            return result
+        return []
         
     def get_title_feature(self):
         if not self.title:
@@ -446,10 +467,13 @@ class HttpExtractor(Extractor):
             # initializing a empty features vector of elm model
             elm_vector = [[0] * len(tf_term)]
             # mapping data into the features vector of elm model
+            sys.stderr.write('term :\t')
             for index, t in enumerate(tf_term):
                 if t.lower() in title_list:
+                    sys.stderr.write(t.lower() + ' ')
                     elm_vector[0][index] = 1
                     
+            sys.stderr.write('\n')
             # classifing the title feature where in the elm model
             score = elm.predict(np.array(elm_vector))
             # must convert to list, because the output of elm.predict is numpy.array
