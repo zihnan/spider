@@ -294,7 +294,10 @@ class DownloadHTTPFile(DownloadFile):
     page_not_found_str_utf8 = [u'这个网站可出售', u'该网站正在出售', u'가비아 호스팅 서비스:웹호스팅,웹메일 호스팅,쇼핑몰호스팅,단독서버,동영상호스팅', u'무료호스팅', u'Хостинг-Центр']
     def is_alive(self, response):
         if 'Content-Type' in response.headers:
-            if response.headers['Content-Type'].startswith('image') or response.headers['Content-Type'].startswith('application'):
+            if response.headers['Content-Type'].startswith('image') or response.headers['Content-Type'].startswith('audio'):
+                self.err = 'not web page({})'.format(response.headers['Content-Type'])
+                return False
+            elif response.headers['Content-Type'].startswith('application') and  'xhtml+xml' not in response.headers['Content-Type']:
                 self.err = 'not web page({})'.format(response.headers['Content-Type'])
                 return False
         #global error_log
@@ -438,7 +441,11 @@ class DownloadHTTPFile(DownloadFile):
         if not self.stream:
             charset = self.__get_html_charset(response)
             sys.stderr.write('Charset : {}\n'.format(charset))
-            if charset != 'utf-8':
+            if not response.encoding:
+                sys.stderr.write('no response.encoding\n')
+                response.encoding = charset
+            elif charset and charset != response.encoding.lower():
+                sys.stderr.write('different response.encoding\n')
                 response.encoding = charset
             return response.text
         download_time_limit = 60*60*10
