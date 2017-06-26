@@ -138,6 +138,34 @@ class LCELMClassifier(BaseEstimator, ClassifierMixin):
         result = f.dot(self.v_).reshape((n_sample,-1))
         return result
     """
+    
+    def decision_function(self, X):
+        check_is_fitted(self, "classes_")
+        # Check data
+        X = check_array(X, accept_sparse=['csr', 'csc'])
+        if self.n_features_ != X.shape[1]:
+            raise ValueError("Number of features of the model must "
+                             "match the input. Model n_features is {1} and "
+                             "input n_features is {2} "
+                             "".format(self.n_features_, X.shape[1]))
+        # Parallel loop
+        n_jobs, n_estimators, starts = _partition_estimators(self.n_estimators,
+                                                             self.n_jobs)
+        all_decisions = Parallel(n_jobs=n_jobs, verbose=self.verbose)(
+            delayed(_parallel_decision_function)(
+                self.estimators_[starts[i]:starts[i + 1]],
+                self.estimators_features_[starts[i]:starts[i + 1]],
+                X)
+            for i in range(n_jobs))
+            
+        print 'decision_function>>>>>>'
+        print all_decisions
+        print 'decision_function>>>>>>'
+            
+        # Reduce
+        decisions = sum(all_decisions) / self.n_estimators
+        return decisions
+    
     def score(self, X, y):
         from sklearn.metrics import accuracy_score
         return accuracy_score(y, self.predict(X))
@@ -166,6 +194,8 @@ def get_data(file_path, length=-1, percent=1.0, enable_shuffle=False):
         random.shuffle(temp)
     print 'Get Data Size: {size}'.format(size=int(len(temp)*percent))
     return temp[:int(len(temp)*percent)]
+    
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Feature Extraction')
