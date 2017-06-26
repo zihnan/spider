@@ -6,11 +6,11 @@ import lxml
 import numpy as np
 import os
 import sys
+from bs4 import BeautifulSoup
+from extractor import Extractor
 from lxml import html
 from sklearn.externals import joblib
 from sklearn_extensions.extreme_learning_machines import ELMClassifier
-
-from extractor import Extractor
 
 class HttpExtractor(Extractor):
     frame = None
@@ -19,6 +19,7 @@ class HttpExtractor(Extractor):
     empty = False
 
     def __init__(self, html_str, **kwargs):
+        self.html_str = html_str
         if 'url' in kwargs:
             self.url = str(kwargs['url']).rstrip()
             self.domain = self.get_domain_name(self.url)
@@ -31,7 +32,7 @@ class HttpExtractor(Extractor):
             self.tfidf_percent = 0.9
         sys.stderr.write('TFIDF-percent: ' + str(self.tfidf_percent) + '\n')
         try:
-            self.html_tree = html.fromstring(html_str)
+            self.html_tree = BeautifulSoup(html_str, 'html.parser')
                     
         except lxml.etree.ParserError:
             self.empty = True
@@ -42,6 +43,7 @@ class HttpExtractor(Extractor):
         self.bytes = self.get_bytes(striped_html_str)
         self.style_block_rows = self.get_style_block_rows(striped_html_str)
         self.script_block_rows = self.get_script_block_rows(striped_html_str)
+        self.script_block = self._get_script_block_rows()
         
         self.link_tags = self.get_link_tags()
         self.a_tags = self.get_a_tags()
@@ -54,56 +56,78 @@ class HttpExtractor(Extractor):
         
         self.bytes_distribution = self.__get_bytes_distribution(html_str)
         
-        self.features = [self.get_kbytes, self.is_frame, self.is_meta_redirect, self.is_meta_base64_redirect, self.is_form, self.is_input_submit, self.is_button_submit, self.same_extern_domain_script_rate, self.script_block_rate, self.style_block_rate, self.external_a_tag_same_domain,self.null_a_tag,self.same_external_domain_link_rate, self.same_external_domain_img_rate, self.get_title_feature]
+        self.features = [self.get_kbytes, self.is_frame, self.is_meta_redirect, self.is_meta_base64_redirect, self.is_form, self.is_input_submit, self.is_button_submit, self.same_extern_domain_script_rate, self.script_block_rate, self.style_block_rate, self.external_a_tag_same_domain,self.null_a_tag,self.same_external_domain_link_rate, self.same_external_domain_img_rate, self.get_title_feature, self.get_form_in_javascript]
         
-    def get_title(self):
-        if self.empty:
-            return []
-        return self.html_tree.xpath('//title/text()')
+    def __cal_tag_block(self, tag_name):
+        #temp = 0
+        temp = []
+        html_str_list = self.html_str.split('\n')
+        if not self.empty:
+            block_begin = -1
+            for i, row in enumerate(html_str_list):
+                if row.find(tag_name) > 0:
+                    l = len(re.findall('<'+tag_name, row.rstrip()))
+                    r = len(re.findall('</'+ tag_name +'>', row.rstrip()))
+                    if l > r:
+                        block_begin = i
+                    elif r > l and block_begin > 0:
+                        #temp += i - block_begin + 1
+                        temp += [j.rstrip() for j in html_str_list[block_begin:i - block_begin + 1]]
+                        block_begin = -1
+                    elif l > 0:
+                        #temp += 1
+                        temp.append(row.rstrip())
+        return temp
         
-    def get_title_feature(self):
-        if not self.title:
-            return 0
-        with codecs.open('tfidf2 {:d}% term'.format(int(self.tfidf_percent * 100)), 'r', encoding='utf-8') as f:
-            # nothing
-            tf_position = json.loads(f.readline().rstrip())
-            # get tf-idf terms
-            tf_term = f.readline().rstrip().split(' ')
-            sys.stderr.write('Load tfidf-{:d}%-elm.model\n'.format(int(self.tfidf_percent * 100)))
-            # loading completed model
-            elm = joblib.load('tfidf-{:d}%-elm.model'.format(int(self.tfidf_percent * 100)))
-            
-            if self.title:
-                title_list = self.__split_title(self.title)
-            else:
-                return 0
-            
-            # initializing a empty features vector of elm model
-            elm_vector = [[0] * len(tf_term)]
-            # mapping data into the features vector of elm model
-            for index, t in enumerate(tf_term):
-                if t.lower() in title_list:
-                    elm_vector[0][index] = 1
-                    
-            # classifing the title feature where in the elm model
-            score = elm.predict(np.array(elm_vector))
-            # must convert to list, because the output of elm.predict is numpy.array
-            # which cannot using to train other model directly
-            score = score.tolist()
-            if isinstance(score, list):
-                return score[0]
-            else:
-                return score
-        
-    def __split_title(self, title):
-        delimiter = ['/', '?', '.', '=', '-', '_', '!',':', ';', '|', '(', ')', ',', '@', '"', "'", '[', ']',u'，', u'、', u'！', u'【', u'】', u'“', u'”', u'・', u'『', u'』', u'｜', u'‹', u'›', u'丨', u'¥']
-        tf_test = []
-        for t in title:
-            t = t.strip()
-            for d in delimiter:
-                t = t.replace(d, ' ')
-            tf_test += [i.lower() for i in t.split(' ') if i]
-        return tf_test
+    def _get_script_block_rows(self):
+        return self.__cal_tag_block( 'script')
+    
+    def get_form_in_javascript(self):
+        if self.script_block_rows:
+            number = 0
+            form = self.get_form()
+            form_name_list = [j for i in form if i.get('name') for j in i.get('name')]
+            form_classname_list = [j for i in form if i.get('class') for j in i.get('class')]
+            form_id_list = [j for i in form if i.get('id') for j in i.get('id')]
+            for row in self.script_block:
+                if re.search('^.*getElementById\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE):
+                    result = re.search('^.*getElementById\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE)
+                    text = result.group(1)
+                    for i in form_id_list:
+                        if i.strip() == text.strip():
+                            number += 1
+                            break
+                elif re.search('^.*getElementsByTagName\(.form.\).*$', row.rstrip(), re.MULTILINE):
+                    number += 1
+                elif re.search('^.*getElementsByClassName\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE):
+                    result = re.search('^.*getElementsByClassName\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE)
+                    text = result.group(1)
+                    for i in form_classname_list:
+                        if i.strip() == text.strip():
+                            number += 1
+                            break
+                elif re.search('^.*forms\[.([^\]]*).\].*$', row.rstrip(), re.MULTILINE):
+                    result = re.search('^.*forms\[.([^\]]*).\].*$', row.rstrip(), re.MULTILINE)
+                    text = result.group(1)
+                    for i in form_name_list:
+                        if i.strip() == text.strip():
+                            number += 1
+                            break
+                elif re.match('^.*getElementsByName\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE):
+                    result = re.match('^.*getElementsByName\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE)
+                    text = result.group(1)
+                    for i in form_name_list:
+                        if i.strip() == text.strip():
+                            number += 1
+                            break
+                elif re.search('^.*querySelector\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE):
+                    result = re.search('^.*querySelector\(.([^)]*).\).*$', row.rstrip(), re.MULTILINE)
+                    text = result.group(1)
+                    for i in form_classname_list + form_id_list:
+                        if i.strip() == text.strip():
+                            number += 1
+                            break
+        return 0
         
     def __get_bytes_distribution(self, html_str):
         temp = [0]*256
@@ -179,12 +203,12 @@ class HttpExtractor(Extractor):
 
     def get_iframe(self):
         if not self.empty:
-            return self.html_tree.xpath('//iframe')
+            return self.html_tree.find_all('iframe')
         return []
 
     def get_frame(self):
         if not self.empty:
-            return self.html_tree.xpath('//frame')
+            return self.html_tree.find_all('frame')
         return []
 
     def frame_feature(self):
@@ -203,7 +227,7 @@ class HttpExtractor(Extractor):
     def get_redirect(self):
         if not self.empty:
             redirect = []
-            for i in self.html_tree.xpath('//meta'):
+            for i in self.html_tree.find_all('meta'):
               if i.get('http-equiv') is not None:
                 if re.match('^refresh$', i.get('http-equiv'), re.IGNORECASE):
                     redirect.append(i)
@@ -244,7 +268,7 @@ class HttpExtractor(Extractor):
 
     def get_submit(self):
         if not self.empty:
-            return self.html_tree.xpath('//*[@type="submit"]')
+            return self.html_tree.find_all(type="submit")
         return []
     
     def is_input_submit(self):
@@ -267,7 +291,7 @@ class HttpExtractor(Extractor):
     
     def get_a_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//a')
+            return self.html_tree.find_all('//a')
         return []
     
     def external_a_tag_same_domain(self):
@@ -319,7 +343,7 @@ class HttpExtractor(Extractor):
     
     def get_link_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//link')
+            return self.html_tree.find_all('link')
         return []
     
     def same_external_domain_link_rate(self):
@@ -350,7 +374,7 @@ class HttpExtractor(Extractor):
     
     def get_img_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//img')
+            return self.html_tree.find_all('img')
         return []
     
     def same_external_domain_img_rate(self):
@@ -381,7 +405,7 @@ class HttpExtractor(Extractor):
     
     def get_form(self):
         if not self.empty:
-            return self.html_tree.xpath('//form')
+            return self.html_tree.find_all('form')
         return None
     
     def is_form(self):
@@ -391,7 +415,7 @@ class HttpExtractor(Extractor):
     
     def get_script_tags(self):
         if not self.empty:
-            return self.html_tree.xpath('//script')
+            return self.html_tree.find_all('script')
         return []
 
     def same_extern_domain_script_rate(self):
@@ -420,6 +444,66 @@ class HttpExtractor(Extractor):
             return float(m)/float(total)
         return 0.0
         
+        
+    def __split_title(self, title):
+        delimiter = ['/', '?', '.', '=', '-', '_', '!',':', ';', '|', '(', ')', ',', '@', '"', "'", '[', ']',u'，', u'、', u'！', u'【', u'】', u'“', u'”', u'・', u'『', u'』', u'｜', u'‹', u'›', u'丨', u'¥']
+        tf_test = []
+        for t in title:
+            t = t.strip()
+            for d in delimiter:
+                t = t.replace(d, ' ')
+            tf_test += [i.lower() for i in t.split(' ') if i]
+        return tf_test
+        
+    def get_title(self):
+        if self.empty:
+            return []
+        '''
+        return self.html_tree.xpath('//title/text()')
+        '''
+        result = self.html_tree.find_all('title')
+        if result:
+            result = [i.text for i in result if i.text.strip()]
+            return result
+        return []
+        
+    def get_title_feature(self):
+        if not self.title:
+            return 0
+        with codecs.open('tfidf2 {:d}% term'.format(int(self.tfidf_percent * 100)), 'r', encoding='utf-8') as f:
+            # nothing
+            tf_position = json.loads(f.readline().rstrip())
+            # get tf-idf terms
+            tf_term = f.readline().rstrip().split(' ')
+            sys.stderr.write('Load tfidf-{:d}%-elm.model\n'.format(int(self.tfidf_percent * 100)))
+            # loading completed model
+            elm = joblib.load('tfidf-{:d}%-elm.model'.format(int(self.tfidf_percent * 100)))
+            
+            if self.title:
+                title_list = self.__split_title(self.title)
+            else:
+                return 0
+            
+            # initializing a empty features vector of elm model
+            elm_vector = [[0] * len(tf_term)]
+            # mapping data into the features vector of elm model
+            sys.stderr.write('term :\t')
+            for index, t in enumerate(tf_term):
+                if t.lower() in title_list:
+                    sys.stderr.write(t.lower() + ' ')
+                    elm_vector[0][index] = 1
+                    
+            sys.stderr.write('\n')
+            # classifing the title feature where in the elm model
+            score = elm.predict(np.array(elm_vector))
+            # must convert to list, because the output of elm.predict is numpy.array
+            # which cannot using to train other model directly
+            score = score.tolist()
+            if isinstance(score, list):
+                return score[0]
+            else:
+                return score
+    '''
     def title_features(self):
         title_list = self.html_tree.xpath('//title/text()')
         with codecs.open('tfidf-term', 'r', encoding='utf-8') as f:
@@ -437,7 +521,7 @@ class HttpExtractor(Extractor):
                     if t in tfidf_set:
                         temp[tfidf_set.index(t)] += 1
             return temp
-        
+        '''
     def __add__(self, other):
         self.a_tags += other.a_tags
         self.link_tags += other.link_tags
