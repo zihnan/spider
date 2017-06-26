@@ -54,7 +54,7 @@ class HttpExtractor(Extractor):
         self.script_tags = self.get_script_tags()
         self.title = self.get_title()
         
-        self.bytes_distribution = self.__get_bytes_distribution(html_str)
+        #self.bytes_distribution = self.__get_bytes_distribution(html_str)
         
         self.features = [self.get_kbytes, self.is_frame, self.is_meta_redirect, self.is_meta_base64_redirect, self.is_form, self.is_input_submit, self.is_button_submit, self.same_extern_domain_script_rate, self.script_block_rate, self.style_block_rate, self.external_a_tag_same_domain,self.null_a_tag,self.same_external_domain_link_rate, self.same_external_domain_img_rate, self.get_title_feature, self.get_form_in_javascript]
         
@@ -83,8 +83,8 @@ class HttpExtractor(Extractor):
         return self.__cal_tag_block( 'script')
     
     def get_form_in_javascript(self):
+        number = 0
         if self.script_block_rows:
-            number = 0
             form = self.get_form()
             form_name_list = [j for i in form if i.get('name') for j in i.get('name')]
             form_classname_list = [j for i in form if i.get('class') for j in i.get('class')]
@@ -127,7 +127,7 @@ class HttpExtractor(Extractor):
                         if i.strip() == text.strip():
                             number += 1
                             break
-        return 0
+        return number > 0
         
     def __get_bytes_distribution(self, html_str):
         temp = [0]*256
@@ -535,8 +535,8 @@ class HttpExtractor(Extractor):
         self.script_tags += other.script_tags
         self.bytes += other.bytes
         self.title += other.title
-        
+        '''
         for i in range(256):
             self.bytes_distribution[i] += other.bytes_distribution[i]
-        
+        '''
         return self
