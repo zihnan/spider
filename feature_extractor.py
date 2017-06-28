@@ -40,6 +40,8 @@ class FeatureExtractor:
             self.quiet = True
         if 'tfidf_percent' in kwargs:
             self.tfidf_percent = kwargs['tfidf_percent']
+        else:
+            self.tfidf_percent = 0.9
         
         self.init(data_list)
     
@@ -49,11 +51,11 @@ class FeatureExtractor:
             self.data_list = data_list
         elif isinstance(data_list, str):
             self.data_list = data_list.split('\n')
-        
         self.extractors = self.__get_extractors()
         self.extractors_features = {}
         self.data_block = {}
         self.__init_data_block()
+        self.__split_data()
         for i in self.data_block:
             self.extractors_features[i] = None
         
@@ -65,7 +67,6 @@ class FeatureExtractor:
         self.extractors.append(extractor)
     
     def run(self):
-        self.__split_data()
         features = []
         url = self.data_list[0]
         instance = self.extractors['url'](self.data_list[0]).set_verbose(self.verbose)
