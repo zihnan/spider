@@ -291,7 +291,7 @@ class HttpExtractor(Extractor):
     
     def get_a_tags(self):
         if not self.empty:
-            return self.html_tree.find_all('//a')
+            return self.html_tree.find_all('a')
         return []
     
     def external_a_tag_same_domain(self):
