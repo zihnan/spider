@@ -54,7 +54,7 @@ class NslookupExtract(Extractor):
             return 0
         if self.debug:
           print date
-        if date > datetime.datetime.now():
+        if date > datetime.datetime.now() or int((datetime.datetime.now() - date).total_seconds() / 86400) >= int((datetime.datetime.now() - datetime.datetime.fromtimestamp(0)).total_seconds() / 86400):
             return 0
         return int((datetime.datetime.now() - date).total_seconds() / 86400)
       return 0
