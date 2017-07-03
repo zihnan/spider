@@ -34,7 +34,7 @@ class NslookupExtract(Extractor):
 
     def is_weird_serial(self):
       if self.serial:
-        return re.match('^\d{4}(0\d|10|11|12)[0-3]\d{3}$', self.serial) is None and re.match('^\d*$', self.serial) is None
+        return re.match('^\d{4}(0\d|10|11|12)[0-3]\d{3}$', self.serial) is None and re.match('^\d*$', self.serial) is None and self.get_day_age == 0
       return True
       
     def get_day_age(self):
@@ -50,7 +50,11 @@ class NslookupExtract(Extractor):
           date = datetime.datetime.fromtimestamp(float(self.serial))
           if self.debug:
             print 'Timestamp : ',
+        else:
+            return 0
         if self.debug:
           print date
+        if date > datetime.datetime.now():
+            return 0
         return int((datetime.datetime.now() - date).total_seconds() / 86400)
       return 0
