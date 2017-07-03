@@ -82,6 +82,13 @@ class HttpExtractor(Extractor):
     def _get_script_block_rows(self):
         return self.__cal_tag_block( 'script')
     
+    def _get_form_in_javascript(self):
+        if self.script_block_rows:
+            block = '\n'.join(self.script_block)
+            if re.match('^.*write\(.*<form[^>]*>.*$', block.lower().rstrip(), re.MULTILINE):
+                return True
+        return False
+    
     def get_form_in_javascript(self):
         number = 0
         if self.script_block_rows:
@@ -409,7 +416,7 @@ class HttpExtractor(Extractor):
         return None
     
     def is_form(self):
-       if self.get_form():
+       if self.get_form() or self._get_form_in_javascript():
            return True
        return False
     
