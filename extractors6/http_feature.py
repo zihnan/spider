@@ -153,6 +153,13 @@ class HttpExtractor(Extractor):
             if re.match('^.*\.write(ln|)\(.*<form[^>]*>.*$', block.lower().rstrip(), re.MULTILINE):
                 return True
         return False
+        
+    def _get_redirect_in_javascript(self):
+        if self.script_block_rows:
+            block = '\n'.join(self.script_block)
+            if re.match('^.*location(\.href|\.replace)[ ]*=[ ]*.http:.*$', block.lower().rstrip(), re.MULTILINE):
+                return True
+        return False
     
     def get_form_in_javascript(self):
         number = 0
