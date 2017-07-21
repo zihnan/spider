@@ -16,40 +16,40 @@ class URLExtractor(Extractor):
     def __init__(self, url):
         self.url = url
         self.keywords = self.get_keywords()
+        domain_name = self.get_domain_name(self.url)
+        self.response = alexa_req.query(domain_name)
         self.features = [self.is_http_connection, self.is_ip_address, self.dots, self.is_special_words, self.url_linkin_num, self.url_traffic_rank]
         
     def is_special_words(self):
         return self.is_at_symbol() or self.is_dash_in_dir_struct() or self.is_start_in_dir_struct() or self.is_or_symbol_in_struct()
     
     def url_linkin_num(self):
-        domain_name = self.get_domain_name(self.url)
-        url_str = awi.get_alexa_url(domain_name)
-        xml_str = urllib.urlopen(url_str).read()
-        xmldoc = minidom.parseString(xml_str)
-        obs_values = xmldoc.getElementsByTagName('aws:LinksInCount')
-        try:
-            linkin= obs_values[0].firstChild.nodeValue
-            linkin = int(linkin)
-            if linkin>10:
-                return 1
-        except:
+        if self.response and self.response.text:
+            xmldoc = minidom.parseString(self.response.text)
+            obs_values = xmldoc.getElementsByTagName('aws:LinksInCount')
+            try:
+                linkin= obs_values[0].firstChild.nodeValue
+                linkin = int(linkin)
+                if linkin>10:
+                    return 1
+            except:
+                return 0
             return 0
         return 0
     
     def url_traffic_rank(self):
-        domain_name = self.get_domain_name(self.url)
-        url_str = awi.get_alexa_url(domain_name)
-        xml_str = urllib.urlopen(url_str).read()
-        xmldoc = minidom.parseString(xml_str)
-        obs_values = xmldoc.getElementsByTagName('aws:Rank')
-        try:
-            rank= obs_values[0].firstChild.nodeValue
-            rank = int(rank)
-            if rank<12000:
-                return 2
-            else:
-                return 1
-        except:
+        if self.response and self.response.text:
+            xmldoc = minidom.parseString(self.response.text)
+            obs_values = xmldoc.getElementsByTagName('aws:Rank')
+            try:
+                rank= obs_values[0].firstChild.nodeValue
+                rank = int(rank)
+                if rank<12000:
+                    return 2
+                else:
+                    return 1
+            except:
+                return 0
             return 0
         return 0
     
