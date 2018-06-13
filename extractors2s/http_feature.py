@@ -358,7 +358,7 @@ class HttpExtractor(Extractor):
     #8 phishy:0 legitimate:1
     def is_login_form(self):
         if self.is_form():
-            if self.is_button_submit() or self.is_input_submit():
+            if self.is_button_submit() or self.is_input_submit() or self.is_submit():
                 return 0
         return 1
     
@@ -419,7 +419,7 @@ class HttpExtractor(Extractor):
             return float(m)/float(total)
         return 0
         
-    # rule based phishy:0 legitimate:1
+    # rule based phishy:1 legitimate:0
     def rule_based(self):
         if self.external_domain_link_rate()>=0.5 :
             return 0
@@ -450,7 +450,7 @@ class HttpExtractor(Extractor):
     def get_title_feature(self):
         if not self.title:
             return 0
-        with codecs.open('tfidf2 {:d}% term'.format(int(self.tfidf_percent * 100)), 'r', encoding='utf-8') as f:
+        with codecs.open('tfidf {:d}% term'.format(int(self.tfidf_percent * 100)), 'r', encoding='utf-8') as f:
             # nothing
             tf_position = json.loads(f.readline().rstrip())
             # get tf-idf terms

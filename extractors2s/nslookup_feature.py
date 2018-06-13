@@ -48,10 +48,10 @@ class NslookupExtract(Extractor):
     def get_year_age(self):
         year_age= self.get_day_age()
         if year_age>2:
-            return 1
+            return 2
         elif year_age<1:
-            return -1
-        return 0
+            return 0
+        return 1
 
     def get_day_age(self):
       if self.serial:

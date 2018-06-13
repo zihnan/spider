@@ -1,13 +1,20 @@
 import re
 import requests
+import urllib
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from extractor import Extractor
+from xml.dom import minidom
+import alexa_req
+
+AWSAccessKeyId='AKIAJWEULOS4W5J5ZFEQ'
+AWSSecretKey='5CmDHmCDNChR1+tGg1iDIaOYXtWgowpgdSmedcXo'
+awi = alexa_req.AlexaWebInfoRequest(AWSAccessKeyId,AWSSecretKey)
 class URLExtractor(Extractor):
     def __init__(self, url):
         self.url = url
         self.keywords = self.get_keywords()
-        self.features = [self.ip_or_hex, self.dots, self.is_at_symbol , self.url_length]
+        self.features = [self.ip_or_hex, self.dots, self.is_at_symbol , self.url_length, self.url_linkin_num, self.url_traffic_rank]
         
     def is_special_words(self):
         return self.is_at_symbol() or self.is_dash_in_dir_struct() or self.is_start_in_dir_struct() or self.is_or_symbol_in_struct()
@@ -61,11 +68,11 @@ class URLExtractor(Extractor):
         domain_name = self.get_domain_name(self.url)
         part = len(domain_name.split('.')) -1
 	if part <2:
-	    res=1
+	    res = 2
 	elif part==2:
-	    res=0
+	    res = 1
 	else:
-	    res=-1
+	    res = 0
 	return res
     
     #2 @ in the url	//if has @ => 1 else 0
@@ -105,52 +112,60 @@ class URLExtractor(Extractor):
     def is_start_in_dir_struct(self):
         url = self.get_without_parameter()
         return url.find('*') > -1
+
+
+
+
+
+	#? number of url
+	#0phishing   1legitimate
+    def url_linkin_num(self):
+	domain_name = self.get_domain_name(self.url)
+	url_str = awi.get_alexa_url(domain_name)
+	
+	xml_str = urllib.urlopen(url_str).read()
+	xmldoc = minidom.parseString(xml_str)
+
+	obs_values = xmldoc.getElementsByTagName('aws:LinksInCount')
+	# prints the first base:OBS_VALUE it finds
+	try:
+		linkin= obs_values[0].firstChild.nodeValue
+		linkin = int(linkin)
+		if linkin>10:
+			return 1
+	except:
+		return 0
+	return 0
     
     #5 website traffic
-    # -1:phishy 0:suspicious 1:legitimate
+    # 0:phishy 1:suspicious 2:legitimate
     def url_traffic_rank(self):
-        ua = UserAgent()
-        user_agent = ua.random
-        request = requests.get("http://www.alexa.com/siteinfo/" + self.get_domain_name(self.url), headers={'User-Agent':'user_agent'})
-        print "http://www.alexa.com/siteinfo/" + self.get_domain_name(self.url)
-        content = request.content
-        print content
-        soup = BeautifulSoup(content, "html.parser")
-        element = soup.find('span', {"class":"globleRank"})
-        '''
-        if element:
-            strong = element.find('strong',{"class":"metrics-data align-vmiddle"})
-            rank = element.find('strong',{"class":"metrics-data align-vmiddle"}).text.split("\n")[2].strip()
-            if rank.isdigit():
-                if int(rank)<150000:
-                    res=1
-                else:
-                    res=0
-            else:
-                res=-1
-        else:
-            res = -1
-            '''
-        strong = element.find('strong',{"class":"metrics-data align-vmiddle"})
-        rank = element.find('strong',{"class":"metrics-data align-vmiddle"}).text.split("\n")[2].strip()
-        if rank.isdigit():
-            if int(rank)<150000:
-                res=1
-            else:
-                res=0
-        else:
-            res=-1
-        
-        return res
+	domain_name = self.get_domain_name(self.url)
+        url_str = awi.get_alexa_url(domain_name)
+	xml_str = urllib.urlopen(url_str).read()
+	xmldoc = minidom.parseString(xml_str)
+
+	obs_values = xmldoc.getElementsByTagName('aws:Rank')
+	# prints the first base:OBS_VALUE it finds
+	try:
+		rank= obs_values[0].firstChild.nodeValue
+		rank = int(rank)
+		if rank<12000:
+			return 2
+		else:
+			return 1
+	except:
+		return 0
+	return 0
     #4 length of url
     def url_length(self):	#short url??
         ulength = len(self.url)
         if ulength<54:
-            res=1
+            res=2
         elif ulength>75:
-            res=0
+            res=1
         else:
-            res=-1
+            res=0
         return res
 
         
